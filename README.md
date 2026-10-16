@@ -147,15 +147,15 @@ sh2txt ~/projects/legacy-automation/
 
 This leaves your primary executable scripts untouched while creating matching `.txt` files right next to them, ready to be grouped or attached to your prompt window.
 
-***
-
-# passgen
+# passgen (v0.0.3)
 
 **A cryptographically secure password and passphrase generator for the command line.**
 
 `passgen` is a lightweight Python utility for generating random passwords and passphrases using Python's `secrets` module. It supports configurable character classes, minimum entropy targets, custom wordlists, and selectable word separators.
 
-The goal is to provide secure defaults for everyday use while keeping customization straightforward.
+The project also includes `wordlist_cleaner.py`, a companion utility for normalizing and deduplicating wordlists before using them to generate passphrases.
+
+The goal is to provide secure defaults for everyday use while keeping customization and wordlist maintenance straightforward.
 
 ## Features
 
@@ -167,7 +167,11 @@ The goal is to provide secure defaults for everyday use while keeping customizat
 - Passphrase generation by exact word count or minimum entropy target.
 - Custom wordlists and configurable passphrase separators.
 - UTF-8 wordlists supported, including files with a UTF-8 BOM.
-- Duplicate word entries removed automatically.
+- Automatic removal of duplicate word entries during passphrase generation.
+- Wordlist preprocessing with `wordlist_cleaner.py`.
+- Unicode normalization and case-insensitive deduplication in the cleaner.
+- Cleaning reports with counts of blank lines, removed duplicates, and unique entries.
+- Original wordlists are preserved by default.
 - Passwords and passphrases written to standard output; metadata written to standard error.
 - No third-party Python dependencies.
 
@@ -176,43 +180,47 @@ The goal is to provide secure defaults for everyday use while keeping customizat
 - Python 3.8 or newer.
 - A Unix-like environment with a shell for the provided wrapper.
 
-The Python script can also be invoked directly on systems where Python 3 is available.
+The Python scripts can also be invoked directly on systems where Python 3 is available.
 
 ## Installation
 
-Clone or copy the repository into your preferred scripts directory. For example:
-
-```bash
-mkdir -p ~/scripts/shellutilities/passgen
-```
-
-Place the following files in the `passgen` directory:
+Place the project files in your preferred scripts directory. For example:
 
 ```text
 passgen/
 ├── passgen.py
 ├── passgen.sh
+├── wordlist_cleaner.py
 └── wordlist.csv
 ```
 
-Make the Python script executable:
+The default `wordlist.csv` is a newline-delimited wordlist, not a conventional comma-separated CSV table.
+
+Make the Python scripts executable:
 
 ```bash
 chmod +x ~/scripts/shellutilities/passgen/passgen.py
+chmod +x ~/scripts/shellutilities/passgen/wordlist_cleaner.py
 ```
 
-The provided shell wrapper defines a `passgen` function that invokes the Python script. If your shell automatically loads functions from `~/scripts`, ensure the wrapper is loaded by your shell configuration.
+The provided shell wrapper defines a `passgen` function that invokes the password generator. If your shell automatically loads functions from `~/scripts`, ensure the wrapper is loaded by your shell configuration.
 
-Alternatively, invoke the Python script directly:
+Alternatively, invoke the generator directly:
 
 ```bash
 python3 ~/scripts/shellutilities/passgen/passgen.py -L 32
 ```
 
-Check the available options:
+Check the available generator options:
 
 ```bash
 passgen --help
+```
+
+Check the wordlist cleaner options:
+
+```bash
+python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py --help
 ```
 
 ## Password generation
@@ -319,6 +327,8 @@ A custom separator can be any non-empty string:
 passgen -p 5 -d '_'
 ```
 
+The output metadata includes the number of words, total character count including separators, wordlist size, and estimated entropy.
+
 ### Entropy target
 
 Use `--passphrase -E` to request a minimum passphrase entropy:
@@ -351,9 +361,136 @@ passgen --passphrase -E 160 --wordlist ~/my-wordlist.txt
 
 The wordlist format is **one word or entry per line**, not a comma-separated CSV table, despite the default filename extension.
 
-Wordlists must be valid UTF-8 text and contain at least two distinct non-empty entries. UTF-8 files with or without a byte-order mark (BOM) are supported. Blank lines are ignored, duplicate entries are removed, and punctuation within entries is preserved.
+Wordlists must be valid UTF-8 text and contain at least two distinct non-empty entries. UTF-8 files with or without a byte-order mark (BOM) are supported. Blank lines and duplicate entries are ignored during passphrase generation, and punctuation within entries is preserved.
 
 For reliable entropy estimates, use a wordlist with sufficient size and entries appropriate for your intended use. Avoid wordlists with predictable or heavily biased content.
+
+## Wordlist cleaner
+
+`wordlist_cleaner.py` is a standalone utility for preparing a wordlist before using it with `passgen`.
+
+It reads a newline-delimited UTF-8 text file, normalizes each entry, removes duplicates, and writes a cleaned wordlist. The original file is not modified.
+
+### What it does
+
+The cleaner applies the following operations in order:
+
+1. Reads UTF-8 text, accepting files with or without a UTF-8 BOM.
+2. Removes leading and trailing whitespace from each line.
+3. Discards blank lines.
+4. Normalizes Unicode text to NFC.
+5. Converts entries to lowercase using Python's Unicode-aware `casefold()`.
+6. Normalizes the result to NFC again.
+7. Removes duplicate entries while preserving the order of their first normalized occurrence.
+8. Writes the resulting entries as UTF-8 without a BOM, using one entry per line.
+9. Reads the output back and verifies that the contents match the generated entries and contain no duplicates.
+
+Internal punctuation and accents are preserved. The cleaner does not remove hyphens, apostrophes, or other punctuation automatically.
+
+Because `casefold()` performs more comprehensive case normalization than `lower()`, some Unicode strings that differ in spelling or representation may be treated as equivalent. For example, `Straße` and `STRASSE` normalize to the same entry, `strasse`.
+
+Unicode NFC normalization unifies canonically equivalent representations of characters without removing accents. Therefore, `café` and `cafe` remain distinct entries.
+
+### Basic usage
+
+Run the cleaner on the default wordlist:
+
+```bash
+python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py \
+  ~/scripts/shellutilities/passgen/wordlist.csv
+```
+
+By default, the output filename is derived from the input filename. For example:
+
+```text
+wordlist.csv -> wordlist.unique.txt
+```
+
+The source file remains unchanged.
+
+### Specify an output path
+
+Use `-o` or `--output` to choose the destination:
+
+```bash
+python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py \
+  ~/scripts/shellutilities/passgen/wordlist.csv \
+  --output ~/wordlists/wordlist.unique.txt
+```
+
+The output directory is created if necessary.
+
+The input and output paths must be different. The cleaner rejects a result containing fewer than two unique non-empty entries.
+
+### Example
+
+Suppose the source wordlist contains:
+
+```text
+ Apple
+apple
+CAFÉ
+café
+cafe
+Straße
+STRASSE
+mother-in-law
+
+```
+
+The cleaned output will be:
+
+```text
+apple
+café
+cafe
+strasse
+mother-in-law
+```
+
+The first normalized occurrence of each unique entry is retained. Duplicate entries and blank lines are discarded.
+
+### Cleaner report
+
+The cleaner writes a summary to standard error, including:
+
+- Total input lines.
+- Blank lines discarded.
+- Duplicate entries removed.
+- Unique entries written.
+- Output file path.
+
+For example:
+
+```text
+Input lines:          8
+Blank lines:          1
+Duplicates removed:  2
+Unique entries:       5
+Output file:          wordlist.unique.txt
+```
+
+The numbers depend on the input file.
+
+### Use the cleaned wordlist with passgen
+
+Once the cleaned wordlist has been generated, pass it to the generator explicitly:
+
+```bash
+passgen --passphrase -E 128 \
+  --wordlist ~/scripts/shellutilities/passgen/wordlist.unique.txt
+```
+
+Or generate a fixed number of words:
+
+```bash
+passgen -p 6 \
+  --wordlist ~/scripts/shellutilities/passgen/wordlist.unique.txt
+```
+
+Cleaning the wordlist beforehand makes its contents easier to inspect and ensures that case variants and canonically equivalent Unicode entries do not inflate the reported wordlist size.
+
+**Important:** cleaning is a preprocessing step, not a substitute for choosing a suitable wordlist. The estimated passphrase entropy depends on the number of distinct entries remaining after normalization and on the generator's uniform selection process.
 
 ## Understanding entropy
 
@@ -387,15 +524,23 @@ The separator does not contribute entropy because it is fixed by the user.
 
 ### Interpreting the output
 
-The generated password or passphrase is printed to standard output. Information about length or word count, wordlist size, and estimated entropy is printed to standard error.
+The generated password or passphrase is printed to standard output. Metadata is printed to standard error.
 
-For example:
+Password example:
 
 ```text
 Length: 32 characters | Entropy: 205.07 bits
 ```
 
-This separation allows the generated secret to be captured independently from the metadata.
+Passphrase example:
+
+```text
+Words: 9 | Characters: 76 (including separators) | Wordlist: 46201 distinct words | Entropy: 139.46 bits
+```
+
+The character count is the length of the actual generated passphrase, including separators. A fixed separator increases the total number of characters but does not increase entropy.
+
+Separating the secret from the metadata allows the generated value to be captured independently.
 
 ## Security considerations
 
@@ -413,6 +558,8 @@ Password generation uses rejection sampling: candidate strings are generated fro
 
 Passphrase entropy depends on the number of distinct entries and the uniform selection process. A large wordlist does not, by itself, guarantee that a passphrase is secure if the selection process is biased or the generated result is exposed.
 
+The cleaner removes duplicates after normalization, but it does not assess word quality, predictability, or linguistic bias.
+
 ### Handling generated secrets
 
 - Avoid placing actual passwords directly in shell command arguments.
@@ -426,6 +573,8 @@ Passphrase entropy depends on the number of distinct entries and the uniform sel
 The reported entropy is a mathematical estimate based on the implemented generation model. It does not account for endpoint compromise, clipboard exposure, malware, insecure storage, or weaknesses in the service where a password is used.
 
 ## Command reference
+
+### `passgen.py`
 
 | Option | Description |
 |---|---|
@@ -444,6 +593,16 @@ The reported entropy is a mathematical estimate based on the implemented generat
 Exactly one of `-L` and `-E` must be supplied in password mode. In passphrase mode, choose either `-p` or `-E`; `--passphrase` is required when using `-E` without `-p`.
 
 Character-class options cannot be combined with passphrase mode. Password and passphrase modes also cannot be mixed with each other.
+
+### `wordlist_cleaner.py`
+
+| Option | Description |
+|---|---|
+| `INPUT` | Source wordlist file |
+| `-o PATH`, `--output PATH` | Destination file; defaults to `INPUT.unique.txt` |
+| `-h`, `--help` | Display usage information |
+
+The cleaner requires an input path and never intentionally overwrites the source file. It preserves the first occurrence of each normalized entry and validates the written output.
 
 ## Examples
 
@@ -471,6 +630,19 @@ passgen --passphrase -E 160
 
 # Passphrase using a custom wordlist
 passgen -p 6 --wordlist ~/my-wordlist.txt
+
+# Clean the default wordlist
+python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py \
+  ~/scripts/shellutilities/passgen/wordlist.csv
+
+# Clean a wordlist to a specific destination
+python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py \
+  ~/scripts/shellutilities/passgen/wordlist.csv \
+  --output ~/wordlists/wordlist.unique.txt
+
+# Generate a passphrase using the cleaned wordlist
+passgen --passphrase -E 128 \
+  --wordlist ~/scripts/shellutilities/passgen/wordlist.unique.txt
 ```
 
 ## Limitations
@@ -478,7 +650,8 @@ passgen -p 6 --wordlist ~/my-wordlist.txt
 - Maximum password length: 4096 characters.
 - Maximum passphrase length: 4096 words.
 - Wordlists must contain at least two distinct non-empty entries.
-- The passphrase wordlist is line-based; CSV parsing is not performed.
+- Wordlists are line-based; CSV parsing is not performed.
+- The cleaner normalizes case and Unicode representation, which can merge some distinct source entries.
 - Entropy estimates rely on uniform random selection and the assumptions described above.
 - Password generation requires at least one character from each selected class.
 
