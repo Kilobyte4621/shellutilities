@@ -266,10 +266,13 @@ def generate_passphrase(options):
     passphrase = options["separator"].join(
         secrets.choice(words) for _ in range(word_count)
     )
+    char_count = len(passphrase)
 
     print(passphrase)
     print(
-        f"Words: {word_count} | Wordlist: {len(words)} distinct words | "
+        f"Words: {word_count} | Characters: {char_count} "
+        f"(including separators) | "
+        f"Wordlist: {len(words)} distinct words | "
         f"Entropy: {entropy:.2f} bits",
         file=sys.stderr,
     )
