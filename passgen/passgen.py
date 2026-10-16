@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Cryptographically secure password and passphrase generator."""
+"""v0.0.3"""
 
 import itertools
 import math
