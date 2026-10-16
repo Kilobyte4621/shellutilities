@@ -21,11 +21,12 @@ DEFAULT_WORDLIST = Path(__file__).resolve().with_name("wordlist.csv")
 
 def usage():
     print("""Usage:
-  passgen CHAR_CLASSES (-L LENGTH | -E BITS)
+  passgen [CHAR_CLASSES] (-L LENGTH | -E BITS)
   passgen -p WORDS [-d SEPARATOR] [--wordlist PATH]
   passgen --passphrase -E BITS [-d SEPARATOR] [--wordlist PATH]
 
 Password options:
+Default classes: -aA0! (when no classes are specified)
   -a             Lowercase letters
   -A             Uppercase letters
   -0             Digits
@@ -49,6 +50,9 @@ Examples:
   passgen '-aA0!' -E 128
   passgen -p 6
   passgen -p 6 -d ' '
+  passgen -L 32
+  passgen -E 128
+  passgen -a0 -L 24
   passgen --passphrase -E 128
   passgen --passphrase -E 160 --wordlist ~/my-wordlist.csv""")
 
@@ -172,14 +176,11 @@ def parse_args(args):
             raise ValueError(f"Word count cannot exceed {MAX_LENGTH}")
 
     else:
-        if word_count is not None:
-            raise ValueError("-p is only valid in passphrase mode")
-
         if (length is None) == (target_entropy is None):
             raise ValueError("Specify exactly one of -L or -E")
 
         if not selected:
-            raise ValueError("Select at least one character class")
+            selected = ["a", "A", "0", "!"]
 
     return {
         "passphrase_mode": passphrase_mode,
