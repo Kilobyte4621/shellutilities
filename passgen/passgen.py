@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Cryptographically secure password and passphrase generator."""
-"""v0.0.3"""
+"""
+passgen — Cryptographically secure password and passphrase generator.
+
+Version: 0.0.4
+"""
 
 import itertools
 import math
@@ -9,12 +12,21 @@ import string
 import sys
 from pathlib import Path
 
+__version__ = "0.0.4"
+
 CLASSES = {
     "a": string.ascii_lowercase,
     "A": string.ascii_uppercase,
     "0": string.digits,
     "!": "!@#$%^&*()-_=+[]{}:,.?/",
 }
+
+# Alphabet used when inserting random characters into passphrase words.
+RANDOM_CHARS = (
+    string.ascii_letters
+    + string.digits
+    + "!@#$%^&*()-_=+[]{}:,.?/"
+)
 
 MAX_LENGTH = 4096
 DEFAULT_WORDLIST = Path(__file__).resolve().with_name("wordlist.csv")
@@ -23,8 +35,8 @@ DEFAULT_WORDLIST = Path(__file__).resolve().with_name("wordlist.csv")
 def usage():
     print("""Usage:
   passgen [CHAR_CLASSES] (-L LENGTH | -E BITS)
-  passgen -p WORDS [-d SEPARATOR] [--wordlist PATH]
-  passgen --passphrase -E BITS [-d SEPARATOR] [--wordlist PATH]
+  passgen -p WORDS [-R COUNT] [-d SEPARATOR] [--wordlist PATH]
+  passgen --passphrase -E BITS [-R COUNT] [-d SEPARATOR] [--wordlist PATH]
 
 Password options:
 Default classes: -aA0! (when no classes are specified)
@@ -37,6 +49,8 @@ Default classes: -aA0! (when no classes are specified)
 
 Passphrase options:
   -p N           Exact number of words
+  -R N           Insert one random character into N word positions
+                 (default: 0; cannot exceed the word count)
   --passphrase   Select passphrase mode (required with -E)
   -E N           Target passphrase entropy in bits
   -d STRING      Word separator (default: -)
@@ -50,12 +64,14 @@ Examples:
   passgen '-aA0!' -L 32
   passgen '-aA0!' -E 128
   passgen -p 6
-  passgen -p 6 -d ' '
+  passgen -p 6 -R 1
+  passgen -p 6 -R 2
+  passgen -p 6 -R 4 -d ' '
   passgen -L 32
   passgen -E 128
   passgen -a0 -L 24
   passgen --passphrase -E 128
-  passgen --passphrase -E 160 --wordlist ~/my-wordlist.csv""")
+  passgen --passphrase -E 160 -R 3 --wordlist ~/my-wordlist.csv""")
 
 
 def valid_count(length, groups):
@@ -76,6 +92,7 @@ def parse_args(args):
     length = None
     target_entropy = None
     word_count = None
+    random_count = None
     separator = "-"
     separator_set = False
     wordlist_path = DEFAULT_WORDLIST
@@ -95,19 +112,22 @@ def parse_args(args):
             i += 1
             continue
 
-        if arg in ("-L", "-E", "-p", "-d", "--wordlist"):
+        if arg in ("-L", "-E", "-p", "-R", "-d", "--wordlist"):
             if i + 1 >= len(args):
                 raise ValueError(f"{arg} requires a value")
 
             value = args[i + 1]
 
-            if arg in ("-L", "-E", "-p"):
+            if arg in ("-L", "-E", "-p", "-R"):
                 try:
                     number = int(value)
                 except ValueError:
                     raise ValueError(f"Invalid integer for {arg}: {value!r}")
 
-                if number < 1:
+                minimum = 0 if arg == "-R" else 1
+                if number < minimum:
+                    if arg == "-R":
+                        raise ValueError("-R cannot be negative")
                     raise ValueError(f"{arg} must be positive")
 
                 if arg == "-L":
@@ -118,10 +138,14 @@ def parse_args(args):
                     if target_entropy is not None:
                         raise ValueError("Duplicate -E")
                     target_entropy = number
-                else:
+                elif arg == "-p":
                     if word_count is not None:
                         raise ValueError("Duplicate -p")
                     word_count = number
+                else:
+                    if random_count is not None:
+                        raise ValueError("Duplicate -R")
+                    random_count = number
 
             elif arg == "-d":
                 if separator_set:
@@ -152,6 +176,7 @@ def parse_args(args):
     passphrase_mode = (
         passphrase_requested
         or word_count is not None
+        or random_count is not None
         or separator_set
         or wordlist_set
     )
@@ -176,6 +201,10 @@ def parse_args(args):
         if word_count is not None and word_count > MAX_LENGTH:
             raise ValueError(f"Word count cannot exceed {MAX_LENGTH}")
 
+        if word_count is not None and random_count is not None:
+            if random_count > word_count:
+                raise ValueError("-R cannot exceed the number of words specified by -p")
+
     else:
         if (length is None) == (target_entropy is None):
             raise ValueError("Specify exactly one of -L or -E")
@@ -189,6 +218,7 @@ def parse_args(args):
         "length": length,
         "target_entropy": target_entropy,
         "word_count": word_count,
+        "random_count": random_count if random_count is not None else 0,
         "separator": separator,
         "wordlist_path": wordlist_path,
     }
@@ -251,10 +281,56 @@ def load_wordlist(path):
     return words
 
 
+def get_insertion_alphabet(separator):
+    """Avoid inserting characters that would be confused with the separator."""
+    alphabet = "".join(char for char in RANDOM_CHARS if char not in separator)
+
+    if not alphabet:
+        raise ValueError(
+            "The separator excludes every available random insertion character"
+        )
+
+    return alphabet
+
+
+def insert_random_character(word, alphabet):
+    """Insert one random character without modifying the original characters."""
+    position = secrets.randbelow(len(word) + 1)
+    character = secrets.choice(alphabet)
+    return word[:position] + character + word[position:]
+
+
+def estimate_passphrase_entropy(words, word_count, random_count, alphabet_size):
+    """Estimate entropy from the random choices used to generate the passphrase."""
+    word_entropy = word_count * math.log2(len(words))
+
+    if random_count == 0:
+        return word_entropy
+
+    # Choose random_count distinct word positions uniformly.
+    selection_entropy = math.log2(math.comb(word_count, random_count))
+
+    # Word lengths vary, so average the insertion-position entropy over
+    # the uniformly selected source words.
+    average_position_entropy = math.fsum(
+        math.log2(len(word) + 1) for word in words
+    ) / len(words)
+
+    insertion_entropy = random_count * (
+        math.log2(alphabet_size) + average_position_entropy
+    )
+
+    # This is the entropy of the generation choices, not necessarily the
+    # exact entropy of the final output string if different choices collide.
+    return word_entropy + selection_entropy + insertion_entropy
+
+
 def generate_passphrase(options):
     words = load_wordlist(options["wordlist_path"])
     word_count = options["word_count"]
     target_entropy = options["target_entropy"]
+    random_count = options["random_count"]
+
     word_entropy = math.log2(len(words))
 
     if word_count is None:
@@ -263,18 +339,49 @@ def generate_passphrase(options):
     if not 1 <= word_count <= MAX_LENGTH:
         raise ValueError(f"Word count must be between 1 and {MAX_LENGTH}")
 
-    entropy = word_count * word_entropy
-    passphrase = options["separator"].join(
-        secrets.choice(words) for _ in range(word_count)
+    if random_count > word_count:
+        raise ValueError("-R cannot exceed the number of generated words")
+
+    alphabet = get_insertion_alphabet(options["separator"])
+
+    # Select distinct word positions, without replacement.
+    modified_positions = set(
+        secrets.SystemRandom().sample(range(word_count), random_count)
     )
+
+    passphrase_words = []
+
+    for index in range(word_count):
+        word = secrets.choice(words)
+
+        if index in modified_positions:
+            word = insert_random_character(word, alphabet)
+
+        passphrase_words.append(word)
+
+    passphrase = options["separator"].join(passphrase_words)
     char_count = len(passphrase)
 
+    entropy = estimate_passphrase_entropy(
+        words,
+        word_count,
+        random_count,
+        len(alphabet),
+    )
+
     print(passphrase)
+
+    entropy_label = (
+        "Nominal generation entropy"
+        if random_count
+        else "Entropy"
+    )
+
     print(
         f"Words: {word_count} | Characters: {char_count} "
         f"(including separators) | "
         f"Wordlist: {len(words)} distinct words | "
-        f"Entropy: {entropy:.2f} bits",
+        f"{entropy_label}: {entropy:.2f} bits",
         file=sys.stderr,
     )
 
