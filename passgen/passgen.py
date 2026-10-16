@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""
-passgen — Cryptographically secure password and passphrase generator.
+"""passgen — Cryptographically secure password and passphrase generator.
 
-Version: 0.0.4
+Version: 0.0.5
 """
 
 import itertools
@@ -12,7 +11,7 @@ import string
 import sys
 from pathlib import Path
 
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 
 CLASSES = {
     "a": string.ascii_lowercase,
@@ -33,7 +32,9 @@ DEFAULT_WORDLIST = Path(__file__).resolve().with_name("wordlist.csv")
 
 
 def usage():
-    print("""Usage:
+    print(f"""passgen v{__version__} — Secure password and passphrase generator
+
+Usage:
   passgen [CHAR_CLASSES] (-L LENGTH | -E BITS)
   passgen -p WORDS [-R COUNT] [-d SEPARATOR] [--wordlist PATH]
   passgen --passphrase -E BITS [-R COUNT] [-d SEPARATOR] [--wordlist PATH]
@@ -49,7 +50,7 @@ Default classes: -aA0! (when no classes are specified)
 
 Passphrase options:
   -p N           Exact number of words
-  -R N           Insert one random character into N word positions
+  -R N           Insert one random character into N distinct words
                  (default: 0; cannot exceed the word count)
   --passphrase   Select passphrase mode (required with -E)
   -E N           Target passphrase entropy in bits
@@ -124,10 +125,10 @@ def parse_args(args):
                 except ValueError:
                     raise ValueError(f"Invalid integer for {arg}: {value!r}")
 
-                minimum = 0 if arg == "-R" else 1
-                if number < minimum:
-                    if arg == "-R":
+                if arg == "-R":
+                    if number < 0:
                         raise ValueError("-R cannot be negative")
+                elif number < 1:
                     raise ValueError(f"{arg} must be positive")
 
                 if arg == "-L":
@@ -201,9 +202,12 @@ def parse_args(args):
         if word_count is not None and word_count > MAX_LENGTH:
             raise ValueError(f"Word count cannot exceed {MAX_LENGTH}")
 
-        if word_count is not None and random_count is not None:
-            if random_count > word_count:
-                raise ValueError("-R cannot exceed the number of words specified by -p")
+        if (
+            word_count is not None
+            and random_count is not None
+            and random_count > word_count
+        ):
+            raise ValueError("-R cannot exceed the number of words specified by -p")
 
     else:
         if (length is None) == (target_entropy is None):
@@ -282,7 +286,7 @@ def load_wordlist(path):
 
 
 def get_insertion_alphabet(separator):
-    """Avoid inserting characters that would be confused with the separator."""
+    """Avoid insertion characters that could be confused with the separator."""
     alphabet = "".join(char for char in RANDOM_CHARS if char not in separator)
 
     if not alphabet:
@@ -294,35 +298,32 @@ def get_insertion_alphabet(separator):
 
 
 def insert_random_character(word, alphabet):
-    """Insert one random character without modifying the original characters."""
+    """Insert one random character without changing original character order."""
     position = secrets.randbelow(len(word) + 1)
     character = secrets.choice(alphabet)
     return word[:position] + character + word[position:]
 
 
 def estimate_passphrase_entropy(words, word_count, random_count, alphabet_size):
-    """Estimate entropy from the random choices used to generate the passphrase."""
-    word_entropy = word_count * math.log2(len(words))
+    """Estimate entropy in the random generation choices."""
+    entropy = word_count * math.log2(len(words))
 
     if random_count == 0:
-        return word_entropy
+        return entropy
 
-    # Choose random_count distinct word positions uniformly.
-    selection_entropy = math.log2(math.comb(word_count, random_count))
+    # The set of modified word positions is chosen uniformly.
+    entropy += math.log2(math.comb(word_count, random_count))
 
-    # Word lengths vary, so average the insertion-position entropy over
-    # the uniformly selected source words.
+    # Every modified word gets an independent character and insertion position.
     average_position_entropy = math.fsum(
         math.log2(len(word) + 1) for word in words
     ) / len(words)
 
-    insertion_entropy = random_count * (
+    entropy += random_count * (
         math.log2(alphabet_size) + average_position_entropy
     )
 
-    # This is the entropy of the generation choices, not necessarily the
-    # exact entropy of the final output string if different choices collide.
-    return word_entropy + selection_entropy + insertion_entropy
+    return entropy
 
 
 def generate_passphrase(options):
@@ -360,7 +361,10 @@ def generate_passphrase(options):
         passphrase_words.append(word)
 
     passphrase = options["separator"].join(passphrase_words)
-    char_count = len(passphrase)
+
+    # Report both total characters and characters excluding separators.
+    char_count_without_separators = sum(map(len, passphrase_words))
+    char_count_with_separators = len(passphrase)
 
     entropy = estimate_passphrase_entropy(
         words,
@@ -372,14 +376,15 @@ def generate_passphrase(options):
     print(passphrase)
 
     entropy_label = (
-        "Nominal generation entropy"
+        "Estimated generation entropy"
         if random_count
         else "Entropy"
     )
 
     print(
-        f"Words: {word_count} | Characters: {char_count} "
-        f"(including separators) | "
+        f"Words: {word_count} | "
+        f"Characters: {char_count_with_separators} (including separators), "
+        f"{char_count_without_separators} (excluding separators) | "
         f"Wordlist: {len(words)} distinct words | "
         f"{entropy_label}: {entropy:.2f} bits",
         file=sys.stderr,
@@ -406,3 +411,4 @@ if __name__ == "__main__":
     except ValueError as exc:
         print(f"passgen: error: {exc}", file=sys.stderr)
         sys.exit(2)
+
