@@ -1,5 +1,12 @@
-# Version Details: v0.5
+# Version Details: v0.5.1
 # Definitive recursive shell loader setup with advanced .scriptignore pattern matching
+# Change (from v0.5):
+#   - Case 2 now invokes shellutilities/scriptignore-sync.sh (if present) to
+#     regenerate the AUTO-GENERATED section of .scriptignore from the
+#     '# scriptignore: skip' directives found in .sh files under the loader root.
+#   - Graceful fallback: if the sync script is missing, behavior is identical
+#     to v0.5 (no .scriptignore manipulation).
+
 add2bash() {
   local bashrc="$HOME/.bashrc"
   local cwd="$PWD"
@@ -114,6 +121,22 @@ while IFS= read -r -d '' f; do
 done < <(find "$CURRENT_DIR" -type f -name "*.sh" -print0)
 EOF
   chmod +x "$loader_file"
+
+  # ─────────────────────────────────────────────────────────────
+  # Sync .scriptignore (auto-generated section) — new in v0.5.1
+  # ─────────────────────────────────────────────────────────────
+  local sync_script="$cwd/shellutilities/scriptignore-sync.sh"
+  if [[ -x "$sync_script" ]]; then
+    echo "Syncing .scriptignore (auto-generated section)..."
+    if "$sync_script" --write 2>&1 | sed 's/^/  /'; then
+      :
+    else
+      echo "  WARNING: sync failed; .scriptignore may be stale." >&2
+    fi
+  else
+    echo "Info: no shellutilities/scriptignore-sync.sh found; skipping .scriptignore sync."
+    echo "      (Create it under $cwd/shellutilities/ to enable auto-sync.)"
+  fi
 
   # 2.2. Preparação do texto que vai para o .bashrc
   text=$(cat <<EOF
