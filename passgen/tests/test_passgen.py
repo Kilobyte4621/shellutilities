@@ -188,6 +188,45 @@ class TestInsertion(unittest.TestCase):
         self.assertEqual(result, "👨‍👩‍👧‍👦X")
         self.assertEqual(len(result), len(family) + 1)
 
+    def test_insertion_respects_all_grapheme_boundaries(self):
+        cases = [
+            ("a\u0301", ["a\u0301"]),
+            ("👍🏽", ["👍🏽"]),
+            ("👨‍👩‍👧‍👦", ["👨‍👩‍👧‍👦"]),
+            ("🇧🇷", ["🇧🇷"]),
+            ("café", ["c", "a", "f", "é"]),
+        ]
+
+        for word, expected_clusters in cases:
+            with self.subTest(word=word):
+                clusters = regex.findall(r"\X", word)
+                self.assertEqual(clusters, expected_clusters)
+
+                for position in range(len(clusters) + 1):
+                    with self.subTest(position=position):
+                        with (
+                            patch(
+                                "passgen.secrets.randbelow",
+                                return_value=position,
+                            ),
+                            patch(
+                                "passgen.secrets.choice",
+                                return_value="#",
+                            ),
+                        ):
+                            result = passgen.insert_random_character(
+                                word, "#"
+                            )
+
+                        expected = (
+                            "".join(clusters[:position])
+                            + "#"
+                            + "".join(clusters[position:])
+                        )
+                        expected = unicodedata.normalize("NFC", expected)
+
+                        self.assertEqual(result, expected)
+
 
 class TestEntropy(unittest.TestCase):
 
