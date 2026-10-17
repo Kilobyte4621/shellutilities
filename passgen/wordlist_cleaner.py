@@ -181,6 +181,7 @@ def clean_wordlists(
             "two distinct entries"
         )
 
+    unique_words.sort()
     write_output(destination, unique_words)
 
     print(f"Input files:        {len(sources)}", file=sys.stderr)
