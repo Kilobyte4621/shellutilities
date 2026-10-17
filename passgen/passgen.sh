@@ -1,4 +1,4 @@
-
 passgen() {
-    python3 "$HOME/scripts/shellutilities/passgen/passgen.py" "$@"
+    "$HOME/scripts/shellutilities/passgen/.venv/bin/python" \
+        "$HOME/scripts/shellutilities/passgen/passgen.py" "$@"
 }

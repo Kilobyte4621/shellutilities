@@ -97,7 +97,7 @@ def parse_args(args):
     target_entropy = None
     word_count = None
     random_count = None
-    separator = "-"
+    separator = "_"
     separator_set = False
     wordlist_path = DEFAULT_WORDLIST
     wordlist_set = False
