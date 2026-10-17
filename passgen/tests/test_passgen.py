@@ -567,14 +567,14 @@ class TestWordlist(unittest.TestCase):
             ):
                 passgen.load_wordlist(path)
 
-    def test_wordlist_normalizes_unicode_and_preserves_case(self):
+    
+    def test_wordlist_normalizes_unicode_and_removes_duplicates(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "words.txt"
             path.write_text(
                 "\n".join([
                     "café",
                     "cafe" + chr(0x0301),
-                    "Casa",
                     "casa",
                     "ação",
                 ]) + "\n",
@@ -583,7 +583,8 @@ class TestWordlist(unittest.TestCase):
 
             words = passgen.load_wordlist(path)
 
-        self.assertEqual(words, ["café", "Casa", "casa", "ação"])
+        self.assertEqual(words, ["café", "casa", "ação"])
+
 
     def test_generate_passphrase_rejects_words_containing_separator(self):
         words = ["alpha", "bravo", "char-lie"]

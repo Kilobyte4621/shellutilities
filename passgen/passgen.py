@@ -309,6 +309,11 @@ def load_wordlist(path):
         if not word or word in seen:
             continue
 
+        if not all(char.isalpha() and char.islower() for char in word):
+            raise ValueError(
+                f"Wordlist must contain only lowercase letters: {word!r}"
+            )
+
         seen.add(word)
         words.append(word)
 
