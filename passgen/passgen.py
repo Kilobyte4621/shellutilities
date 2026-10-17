@@ -24,7 +24,7 @@ CLASSES = {
 }
 
 RANDOM_CHARS = (
-    string.ascii_letters
+    string.ascii_uppercase
     + string.digits
     + "!@#$%^&*()-_=+[]{}:,.?/"
 )
@@ -97,7 +97,7 @@ def parse_args(args):
     target_entropy = None
     word_count = None
     random_count = None
-    separator = "_"
+    separator = "-"
     separator_set = False
     wordlist_path = DEFAULT_WORDLIST
     wordlist_set = False
