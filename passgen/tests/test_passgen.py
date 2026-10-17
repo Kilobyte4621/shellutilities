@@ -585,5 +585,48 @@ class TestWordlist(unittest.TestCase):
 
         self.assertEqual(words, ["café", "Casa", "casa", "ação"])
 
+    def test_generate_passphrase_rejects_words_containing_separator(self):
+        words = ["alpha", "bravo", "char-lie"]
+        options = {
+            "wordlist_path": "unused.txt",
+            "word_count": 2,
+            "target_entropy": None,
+            "random_count": 0,
+            "separator": "-",
+        }
+
+        with (
+            patch("passgen.load_wordlist", return_value=words),
+            patch("sys.stdout", io.StringIO()),
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "selected separator",
+            ):
+                passgen.generate_passphrase(options)
+
+    def test_generate_passphrase_accepts_words_without_separator(self):
+        words = ["alpha", "bravo"]
+        options = {
+            "wordlist_path": "unused.txt",
+            "word_count": 2,
+            "target_entropy": None,
+            "random_count": 0,
+            "separator": " ",
+        }
+
+        with (
+            patch("passgen.load_wordlist", return_value=words),
+            patch(
+                "passgen.secrets.choice",
+                side_effect=words,
+            ),
+            patch("sys.stdout", io.StringIO()) as stdout,
+            patch("sys.stderr", io.StringIO()),
+        ):
+            passgen.generate_passphrase(options)
+
+        self.assertEqual(stdout.getvalue().strip(), "alpha bravo")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

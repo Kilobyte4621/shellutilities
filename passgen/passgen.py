@@ -504,6 +504,19 @@ def required_word_count(
 
 def generate_passphrase(options):
     words = load_wordlist(options["wordlist_path"])
+    separator = options["separator"]
+
+    conflicting_words = [
+        word for word in words
+        if separator in word
+    ]
+
+    if conflicting_words:
+        raise ValueError(
+            "Wordlist contains words with the selected separator "
+            f"{separator!r}: {conflicting_words[:5]!r}"
+        )
+
     word_count = options["word_count"]
     target_entropy = options["target_entropy"]
     random_count = options["random_count"]
@@ -513,7 +526,7 @@ def generate_passphrase(options):
             f"-R cannot exceed {MAX_LENGTH}"
         )
 
-    alphabet = get_insertion_alphabet(options["separator"])
+    alphabet = get_insertion_alphabet(separator)
 
     if word_count is None:
         word_count = required_word_count(
