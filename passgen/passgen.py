@@ -10,6 +10,7 @@ import math
 import secrets
 import string
 import sys
+import unicodedata
 from pathlib import Path
 
 __version__ = "0.0.6"
@@ -285,6 +286,7 @@ def generate_password(options):
     )
 
 
+
 def load_wordlist(path):
     try:
         content = path.read_text(encoding="utf-8-sig")
@@ -297,18 +299,26 @@ def load_wordlist(path):
             f"Wordlist is not valid UTF-8: {path}"
         ) from exc
 
-    words = list(dict.fromkeys(
-        line.strip()
-        for line in content.splitlines()
-        if line.strip()
-    ))
+    words = []
+    seen = set()
+
+    for line in content.splitlines():
+        word = unicodedata.normalize("NFC", line.strip())
+
+        if not word or word in seen:
+            continue
+
+        seen.add(word)
+        words.append(word)
 
     if len(words) < 2:
         raise ValueError(
-            "Wordlist must contain at least two distinct words"
+            "Wordlist must contain at least two distinct words "
+            "after Unicode normalization"
         )
 
     return words
+
 
 
 def get_insertion_alphabet(separator):
@@ -325,12 +335,94 @@ def get_insertion_alphabet(separator):
     return alphabet
 
 
+
 def insert_random_character(word, alphabet):
-    """Insert exactly one random character, preserving all original characters."""
+    """Insert one random character and normalize the result to NFC."""
     position = secrets.randbelow(len(word) + 1)
     character = secrets.choice(alphabet)
+    modified = word[:position] + character + word[position:]
 
-    return word[:position] + character + word[position:]
+    return unicodedata.normalize("NFC", modified)
+
+
+
+
+def modified_word_entropy(word, alphabet):
+    """Calculate exact Shannon entropy after insertion and NFC normalization."""
+    if not alphabet:
+        raise ValueError("Insertion alphabet cannot be empty")
+
+    word = unicodedata.normalize("NFC", word)
+    output_counts = {}
+
+    for character in alphabet:
+        for position in range(len(word) + 1):
+            modified = word[:position] + character + word[position:]
+            modified = unicodedata.normalize("NFC", modified)
+
+            output_counts[modified] = (
+                output_counts.get(modified, 0) + 1
+            )
+
+    total_choices = len(alphabet) * (len(word) + 1)
+
+    return -math.fsum(
+        (count / total_choices) * math.log2(count / total_choices)
+        for count in output_counts.values()
+    )
+
+
+
+def passphrase_position_entropy(words, alphabet, modified_probability):
+    """Calculate the exact output entropy of one passphrase position.
+
+    Each source word is selected uniformly. With probability
+    modified_probability, one random character is inserted.
+    Identical output strings have their probabilities combined.
+    """
+    if not words:
+        raise ValueError("Wordlist cannot be empty")
+
+    if not alphabet:
+        raise ValueError("Insertion alphabet cannot be empty")
+
+    if not 0.0 <= modified_probability <= 1.0:
+        raise ValueError("Modified probability must be between 0 and 1")
+
+    word_probability = 1.0 / len(words)
+    output_probabilities = {}
+
+    for word in words:
+        original_probability = (
+            word_probability * (1.0 - modified_probability)
+        )
+        output_probabilities[word] = (
+            output_probabilities.get(word, 0.0)
+            + original_probability
+        )
+
+        if modified_probability == 0.0:
+            continue
+
+        insertion_probability = (
+            word_probability
+            * modified_probability
+            / (len(alphabet) * (len(word) + 1))
+        )
+
+        for character in alphabet:
+            for position in range(len(word) + 1):
+                modified = word[:position] + character + word[position:]
+                output_probabilities[modified] = (
+                    output_probabilities.get(modified, 0.0)
+                    + insertion_probability
+                )
+
+    return -math.fsum(
+        probability * math.log2(probability)
+        for probability in output_probabilities.values()
+        if probability > 0.0
+    )
 
 
 def generation_choice_entropy(
