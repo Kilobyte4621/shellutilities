@@ -1,10 +1,11 @@
 
 # Generated wordlists
 *.unique.txt
-
 wordlist.*
 
 # Python bytecode and cache
 __pycache__/
 *.py[cod]
-/passgen/.venv/
+
+# Virtual environment
+.venv/
