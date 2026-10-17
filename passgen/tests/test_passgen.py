@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Unit tests for passgen."""
 
+import io
+import itertools
 import math
 import sys
 import tempfile
+import unicodedata
 import unittest
+from collections import Counter
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,7 +20,88 @@ sys.path.insert(
 import passgen
 
 
+
+
 class TestInsertion(unittest.TestCase):
+
+    def test_modified_word_entropy_matches_exhaustive_distribution(self):
+        words = [
+            "",
+            "a",
+            "é",
+            "ee",
+            "café",
+            "a\u0301",
+            "\u0301",
+            "\u0338",
+            "👨‍👩‍👧‍👦",
+        ]
+
+        alphabets = [
+            "a",
+            "ab",
+            "aa",
+            "e",
+            "é",
+            "\u0301",
+            "\u0338",
+            "e\u0301",
+            "a\u0301",
+            "X\u0301",
+            "👩",
+        ]
+
+        def entropy(outputs):
+            counts = Counter(outputs)
+            total = len(outputs)
+            return -sum(
+                (count / total) * math.log2(count / total)
+                for count in counts.values()
+            )
+
+        cases = 0
+
+        for original_word in words:
+            word = unicodedata.normalize("NFC", original_word)
+
+            for alphabet in alphabets:
+                outputs = []
+
+                for position in range(len(word) + 1):
+                    for character in alphabet:
+                        with (
+                            patch(
+                                "passgen.secrets.randbelow",
+                                return_value=position,
+                            ),
+                            patch(
+                                "passgen.secrets.choice",
+                                return_value=character,
+                            ),
+                        ):
+                            outputs.append(
+                                passgen.insert_random_character(
+                                    word, alphabet
+                                )
+                            )
+
+                expected = entropy(outputs)
+                actual = passgen.modified_word_entropy(word, alphabet)
+
+                self.assertAlmostEqual(
+                    actual,
+                    expected,
+                    places=12,
+                    msg=(
+                        f"word={word!r}, alphabet={alphabet!r}, "
+                        f"expected={expected}, actual={actual}"
+                    ),
+                )
+                cases += 1
+
+        self.assertEqual(cases, len(words) * len(alphabets))
+
+
 
     def test_modified_word_entropy_accounts_for_duplicate_outputs(self):
         alphabet = "e" + chr(0x0301)
@@ -71,7 +156,7 @@ class TestInsertion(unittest.TestCase):
             result = passgen.insert_random_character("café", "\u0301")
 
         self.assertEqual(result, "ćafé")
-        self.assertTrue(unicodedata.is_normalized("NFC", result))    
+        self.assertTrue(unicodedata.is_normalized("NFC", result))
 
 
     def test_insertion_with_noncomposable_combining_mark(self):
@@ -103,6 +188,86 @@ class TestInsertion(unittest.TestCase):
 
 
 class TestEntropy(unittest.TestCase):
+
+    def test_complete_passphrase_entropy_by_exhaustive_enumeration(self):
+        words = ["e", "x"]
+        alphabet = "e\u0301"
+        separator = "-"
+        word_count = 2
+        random_count = 1
+
+        output_counts = Counter()
+        total_paths = 0
+
+        # Enumera as escolhas de palavras, a posição modificada,
+        # a posição de inserção e o caractere inserido.
+        for selected_words in itertools.product(
+            words, repeat=word_count
+        ):
+            for (modified_index,) in itertools.combinations(
+                range(word_count), random_count
+            ):
+                word = selected_words[modified_index]
+
+                for position in range(len(word) + 1):
+                    for character in alphabet:
+                        modified = unicodedata.normalize(
+                            "NFC",
+                            word[:position] + character + word[position:],
+                        )
+
+                        output_words = list(selected_words)
+                        output_words[modified_index] = modified
+                        output = separator.join(output_words)
+
+                        output_counts[output] += 1
+                        total_paths += 1
+
+        # Todas as palavras têm o mesmo comprimento, portanto
+        # os 32 caminhos enumerados têm a mesma probabilidade.
+        self.assertEqual(total_paths, 32)
+
+        output_entropy = -sum(
+            (count / total_paths) * math.log2(count / total_paths)
+            for count in output_counts.values()
+        )
+
+        choice_entropy = passgen.generation_choice_entropy(
+            words,
+            word_count,
+            random_count,
+            len(alphabet),
+        )
+
+        self.assertAlmostEqual(output_entropy, 4.75)
+        self.assertAlmostEqual(choice_entropy, 5.0)
+        self.assertLess(output_entropy, choice_entropy)
+
+
+    def test_generation_choice_entropy_can_exceed_output_entropy(self):
+        words = ["e", "x"]
+        alphabet = "e\u0301"
+
+        choice_entropy = passgen.generation_choice_entropy(
+            words, 1, 1, len(alphabet)
+        )
+        output_entropy = passgen.passphrase_position_entropy(
+            words, alphabet, 1.0
+        )
+
+        self.assertAlmostEqual(choice_entropy, 3.0, places=12)
+        self.assertAlmostEqual(output_entropy, 2.75, places=12)
+        self.assertGreater(choice_entropy, output_entropy)
+
+    def test_passphrase_position_entropy_normalizes_unicode_outputs(self):
+        alphabet = "e\u0301"
+
+        actual = passgen.passphrase_position_entropy(
+            ["e", "x"], alphabet, 1.0
+        )
+
+        self.assertAlmostEqual(actual, 2.75, places=12)
+
 
     def test_generation_choice_entropy_formula(self):
         words = ["a", "abcd"]
@@ -193,6 +358,123 @@ class TestEntropy(unittest.TestCase):
         self.assertTrue(
             math.isclose(entropy, math.log2(5), abs_tol=1e-12)
         )
+
+    def test_nfc_collisions_reduce_final_output_entropy(self):
+        words = ["e", "x"]
+        alphabet = "e\u0301"
+
+        output_counts = Counter()
+        total_paths = 0
+
+        for word in words:
+            for position in range(len(word) + 1):
+                for character in alphabet:
+                    output = unicodedata.normalize(
+                        "NFC",
+                        word[:position] + character + word[position:],
+                    )
+                    output_counts[output] += 1
+                    total_paths += 1
+
+        output_entropy = -sum(
+            (count / total_paths) * math.log2(count / total_paths)
+            for count in output_counts.values()
+        )
+
+        choice_entropy = passgen.generation_choice_entropy(
+            words,
+            word_count=1,
+            random_count=1,
+            alphabet_size=len(alphabet),
+        )
+
+        self.assertEqual(total_paths, 8)
+        self.assertEqual(len(output_counts), 7)
+        self.assertAlmostEqual(output_entropy, 2.75)
+        self.assertAlmostEqual(choice_entropy, 3.0)
+        self.assertGreater(choice_entropy, output_entropy)
+
+    def test_required_word_count_targets_choice_entropy(self):
+        words = ["e", "x"]
+        target = 3.0
+        random_count = 1
+        alphabet_size = 2
+
+        count = passgen.required_word_count(
+            words,
+            target,
+            random_count,
+            alphabet_size,
+        )
+
+        choice_entropy = passgen.generation_choice_entropy(
+            words,
+            count,
+            random_count,
+            alphabet_size,
+        )
+
+        self.assertGreaterEqual(choice_entropy, target)
+
+        if count > random_count:
+            previous_entropy = passgen.generation_choice_entropy(
+                words,
+                count - 1,
+                random_count,
+                alphabet_size,
+            )
+            self.assertLess(previous_entropy, target)
+
+
+    def test_passphrase_reports_generation_choice_entropy(self):
+        words = ["alpha", "bravo"]
+
+        for random_count in (0, 1):
+            with self.subTest(random_count=random_count):
+                options = {
+                    "wordlist_path": "unused.txt",
+                    "word_count": 2,
+                    "target_entropy": None,
+                    "random_count": random_count,
+                    "separator": "-",
+                }
+
+                stderr = io.StringIO()
+                expected_entropy = passgen.generation_choice_entropy(
+                    words,
+                    word_count=2,
+                    random_count=random_count,
+                    alphabet_size=len(
+                        passgen.get_insertion_alphabet(options["separator"])
+                    ),
+                )
+
+                with (
+                    patch("passgen.load_wordlist", return_value=words),
+                    patch(
+                        "passgen.secrets.choice",
+                        side_effect=["alpha", "bravo"],
+                    ),
+                    patch("passgen.secrets.SystemRandom") as mock_random,
+                    patch(
+                        "passgen.insert_random_character",
+                        return_value="a1pha",
+                    ),
+                    patch("sys.stderr", stderr),
+                    patch("sys.stdout", io.StringIO()),
+                ):
+                    mock_random.return_value.sample.side_effect = (
+                        lambda population, count: list(population)[:count]
+                    )
+                    passgen.generate_passphrase(options)
+
+                report = stderr.getvalue()
+                self.assertIn("Generation-choice entropy:", report)
+                self.assertIn(
+                    f"Generation-choice entropy: {expected_entropy:.2f} bits",
+                    report,
+                )
+
 
 class TestArguments(unittest.TestCase):
 

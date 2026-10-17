@@ -197,7 +197,7 @@ Use `--passphrase -E` to request a minimum passphrase entropy:
 passgen --passphrase -E 128
 ```
 
-The generator calculates the number of words needed to meet the target, rounding up to the next whole word.
+The generator calculates the smallest supported word count whose **generation-choice entropy** meets the requested target, rounding up to a whole number of words. This estimates the entropy of the generator's internal random choices, not necessarily the exact entropy of the final passphrase string. With random-character insertion (`-R` greater than zero), different random choices can produce identical output strings, particularly when Unicode normalization causes collisions.
 
 For example, if the wordlist contains 46,201 distinct words, each independently selected word contributes approximately 15.50 bits of entropy. A 128-bit target therefore requires nine words, providing approximately 139.46 bits without random-character insertion.
 
@@ -258,9 +258,9 @@ When using `--passphrase -E BITS`, the generator calculates the smallest support
 
 #### Entropy reporting with `-R`
 
-Without insertion, the program reports `Entropy`.
-
-When `-R` is greater than zero, it reports `Generation-choice entropy`. The calculation accounts for:
+The program reports `Generation-choice entropy` for both `-R 0` and `-R` greater than zero.
+- Without insertion, this value equals the final output entropy under the documented model, assuming distinct normalized wordlist entries and an unambiguous fixed separator.
+- With insertion, different internal random choices can produce identical output strings, so generation-choice entropy may exceed final output entropy. The calculation accounts for:
 
 1. Independent word selections from the wordlist.
 2. Selection of distinct word positions to modify.

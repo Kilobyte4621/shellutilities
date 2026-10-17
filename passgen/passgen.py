@@ -393,6 +393,7 @@ def passphrase_position_entropy(words, alphabet, modified_probability):
     output_probabilities = {}
 
     for word in words:
+        word = unicodedata.normalize("NFC", word)
         original_probability = (
             word_probability * (1.0 - modified_probability)
         )
@@ -412,7 +413,10 @@ def passphrase_position_entropy(words, alphabet, modified_probability):
 
         for character in alphabet:
             for position in range(len(word) + 1):
-                modified = word[:position] + character + word[position:]
+                modified = unicodedata.normalize(
+                    "NFC",
+                    word[:position] + character + word[position:],
+                )
                 output_probabilities[modified] = (
                     output_probabilities.get(modified, 0.0)
                     + insertion_probability
@@ -549,11 +553,7 @@ def generate_passphrase(options):
 
     print(passphrase)
 
-    entropy_label = (
-        "Generation-choice entropy"
-        if random_count
-        else "Entropy"
-    )
+    entropy_label = "Generation-choice entropy"
 
     print(
         f"Words: {word_count} | "
