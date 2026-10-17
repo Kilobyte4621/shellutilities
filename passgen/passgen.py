@@ -11,6 +11,7 @@ import secrets
 import string
 import sys
 import unicodedata
+import regex
 from pathlib import Path
 
 __version__ = "0.0.6"
@@ -337,10 +338,12 @@ def get_insertion_alphabet(separator):
 
 
 def insert_random_character(word, alphabet):
-    """Insert one random character and normalize the result to NFC."""
-    position = secrets.randbelow(len(word) + 1)
+    """Insert one random character at a grapheme-cluster boundary."""
+    word = unicodedata.normalize("NFC", word)
+    clusters = regex.findall(r"\X", word)
+    position = secrets.randbelow(len(clusters) + 1)
     character = secrets.choice(alphabet)
-    modified = word[:position] + character + word[position:]
+    modified = "".join(clusters[:position]) + character + "".join(clusters[position:])
 
     return unicodedata.normalize("NFC", modified)
 
@@ -353,18 +356,23 @@ def modified_word_entropy(word, alphabet):
         raise ValueError("Insertion alphabet cannot be empty")
 
     word = unicodedata.normalize("NFC", word)
+    clusters = regex.findall(r"\X", word)
     output_counts = {}
 
     for character in alphabet:
-        for position in range(len(word) + 1):
-            modified = word[:position] + character + word[position:]
+        for position in range(len(clusters) + 1):
+            modified = (
+                "".join(clusters[:position])
+                + character
+                + "".join(clusters[position:])
+            )
             modified = unicodedata.normalize("NFC", modified)
 
             output_counts[modified] = (
                 output_counts.get(modified, 0) + 1
             )
 
-    total_choices = len(alphabet) * (len(word) + 1)
+    total_choices = len(alphabet) * (len(clusters) + 1)
 
     return -math.fsum(
         (count / total_choices) * math.log2(count / total_choices)
@@ -405,17 +413,20 @@ def passphrase_position_entropy(words, alphabet, modified_probability):
         if modified_probability == 0.0:
             continue
 
+        clusters = regex.findall(r"\X", word)
         insertion_probability = (
             word_probability
             * modified_probability
-            / (len(alphabet) * (len(word) + 1))
+            / (len(alphabet) * (len(clusters) + 1))
         )
 
         for character in alphabet:
-            for position in range(len(word) + 1):
+            for position in range(len(clusters) + 1):
                 modified = unicodedata.normalize(
                     "NFC",
-                    word[:position] + character + word[position:],
+                    "".join(clusters[:position])
+                    + character
+                    + "".join(clusters[position:]),
                 )
                 output_probabilities[modified] = (
                     output_probabilities.get(modified, 0.0)
@@ -453,7 +464,10 @@ def generation_choice_entropy(
     # Each modified word has a uniformly selected insertion position.
     # Average over the uniformly selected source word.
     average_position_entropy = math.fsum(
-        math.log2(len(word) + 1) for word in words
+        math.log2(
+            len(regex.findall(r"\X", unicodedata.normalize("NFC", word))) + 1
+        )
+        for word in words
     ) / len(words)
 
     insertion_entropy = random_count * (

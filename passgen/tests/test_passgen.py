@@ -4,6 +4,7 @@
 import io
 import itertools
 import math
+import regex
 import sys
 import tempfile
 import unicodedata
@@ -66,8 +67,9 @@ class TestInsertion(unittest.TestCase):
 
             for alphabet in alphabets:
                 outputs = []
+                clusters = regex.findall(r"\X", word)
 
-                for position in range(len(word) + 1):
+                for position in range(len(clusters) + 1):
                     for character in alphabet:
                         with (
                             patch(
@@ -174,7 +176,7 @@ class TestInsertion(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertTrue(unicodedata.is_normalized("NFC", result))
 
-    def test_insertion_can_split_emoji_grapheme_cluster(self):
+    def test_insertion_preserves_emoji_grapheme_cluster(self):
         family = "👨‍👩‍👧‍👦"
 
         with (
@@ -183,7 +185,7 @@ class TestInsertion(unittest.TestCase):
         ):
             result = passgen.insert_random_character(family, "X")
 
-        self.assertEqual(result, "👨X‍👩‍👧‍👦")
+        self.assertEqual(result, "👨‍👩‍👧‍👦X")
         self.assertEqual(len(result), len(family) + 1)
 
 
