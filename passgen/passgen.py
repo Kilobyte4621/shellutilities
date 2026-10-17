@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""passgen — Cryptographically secure password and passphrase generator.
+"""
+passgen — Cryptographically secure password and passphrase generator.
 
 Version: 0.0.6
 """
