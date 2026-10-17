@@ -221,9 +221,9 @@ def main():
     parser.add_argument(
         "--min-length",
         type=positive_int,
-        default=3,
+        default=5,
         metavar="N",
-        help="Minimum number of letters (default: 3)",
+        help="Minimum number of letters (default: 5)",
     )
     parser.add_argument(
         "--keep-all",
