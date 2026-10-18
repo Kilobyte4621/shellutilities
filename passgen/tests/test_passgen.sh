@@ -1,4 +1,5 @@
 test_passgen() {
-    "$HOME/scripts/shellutilities/passgen/.venv/bin/python" \
-        "$HOME/scripts/shellutilities/passgen/tests/test_passgen.py" "$@"
+    local script_dir
+    script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+    "$script_dir/../.venv/bin/python" "$script_dir/test_passgen.py" "$@"
 }

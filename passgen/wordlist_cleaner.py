@@ -215,8 +215,7 @@ def clean_wordlists(
     sources,
     destination,
     encoding="auto",
-    min_length=3,
-    keep_all=False,
+    min_length=5,
     memo=False,
     memo_distance=2,
 ):
@@ -267,7 +266,8 @@ def clean_wordlists(
                 rejected_count += 1
                 continue
 
-            if not keep_all and len(word) < min_length:
+
+            if len(word) < min_length:
                 rejected_count += 1
                 continue
 
@@ -348,13 +348,6 @@ def main():
         metavar="N",
         help="Minimum number of letters (default: 5)",
     )
-    
-    parser.add_argument(
-        "--keep-all",
-        action="store_true",
-        help="Keep all extracted contents, including numbers and symbols",
-    )
-
     parser.add_argument(
         "--memo",
         action="store_true",
@@ -371,7 +364,6 @@ def main():
             "(default: 2; short words use a maximum of 1)"
         ),
     )
-
     parser.add_argument(
         "-R", "--recursive",
         action="store_true",
@@ -435,7 +427,6 @@ def main():
             destination,
             encoding=args.encoding,
             min_length=args.min_length,
-            keep_all=args.keep_all,
             memo=args.memo,
             memo_distance=args.memo_distance,
         )
