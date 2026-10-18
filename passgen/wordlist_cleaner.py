@@ -370,6 +370,12 @@ def main():
         ),
     )
 
+    parser.add_argument(
+        "-R", "--recursive",
+        action="store_true",
+        help="Recursively search for wordlist files in subdirectories",
+    )    
+
     args = parser.parse_args()
     source = args.input.expanduser()
 
@@ -388,16 +394,22 @@ def main():
         )
     elif source.is_dir():
         try:
-            sources = sorted(
-                path for path in source.iterdir()
-                if path.is_file()
-            )
+            if args.recursive:
+                sources = sorted(
+                    path for path in source.rglob("*")
+                    if path.is_file()
+                )
+            else:
+                sources = sorted(
+                    path for path in source.iterdir()
+                    if path.is_file()
+                )
         except OSError as exc:
             print(
                 f"wordlist_cleaner: error: cannot list directory: {exc}",
                 file=sys.stderr,
             )
-            return 2
+            return 2        
 
         suffix = "memo" if args.memo else "unique"
         default_output = Path.cwd() / f"wordlist.{suffix}.txt"
