@@ -48,14 +48,14 @@ Default classes: -aA0! (when no classes are specified)
   -0             Digits
   -!             Special characters
   -L N           Exact password length
-  -E N           Target password entropy in bits
+  -E N           Target password entropy in bits, based on valid strings
 
 Passphrase options:
   -p N           Exact number of words
   -R N           Insert one random character into N distinct words
                  (default: 0; cannot exceed the word count)
   --passphrase   Select passphrase mode (required with -E)
-  -E N           Target generation-choice entropy in bits
+  -E N           Target generation-choice entropy in bits (passphrase mode)
   -d STRING      Word separator (default: -)
   --wordlist PATH
                  Wordlist file (default: wordlist.csv beside this script)

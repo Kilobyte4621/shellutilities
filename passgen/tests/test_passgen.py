@@ -22,7 +22,6 @@ import passgen
 import wordlist_cleaner
 
 
-
 class TestInsertion(unittest.TestCase):
 
     def test_modified_word_entropy_matches_exhaustive_distribution(self):
@@ -516,6 +515,55 @@ class TestEntropy(unittest.TestCase):
                     report,
                 )
 
+    def test_ascii_lowercase_words_have_equal_choice_and_output_entropy(self):
+        words = ["cat", "dog"]
+        alphabet = "A7!"
+        separator = "_"
+        word_count = 2
+        random_count = 1
+
+        output_counts = Counter()
+        total_paths = 0
+
+        for selected_words in itertools.product(words, repeat=word_count):
+            for (modified_index,) in itertools.combinations(
+                range(word_count), random_count
+            ):
+                word = selected_words[modified_index]
+                clusters = regex.findall(r"\X", word)
+
+                for position in range(len(clusters) + 1):
+                    for character in alphabet:
+                        modified = unicodedata.normalize(
+                            "NFC",
+                            "".join(clusters[:position])
+                            + character
+                            + "".join(clusters[position:]),
+                        )
+
+                        output_words = list(selected_words)
+                        output_words[modified_index] = modified
+                        output = separator.join(output_words)
+
+                        output_counts[output] += 1
+                        total_paths += 1
+
+        output_entropy = -math.fsum(
+            (count / total_paths) * math.log2(count / total_paths)
+            for count in output_counts.values()
+        )
+
+        choice_entropy = passgen.generation_choice_entropy(
+            words,
+            word_count,
+            random_count,
+            len(alphabet),
+        )
+
+        self.assertEqual(total_paths, 96)
+        self.assertEqual(len(output_counts), total_paths)
+        self.assertAlmostEqual(output_entropy, choice_entropy, places=12)
+
 
 class TestInsertionAlphabet(unittest.TestCase):
     def test_default_separator_is_excluded(self):
@@ -647,7 +695,6 @@ class TestWordlist(unittest.TestCase):
             passgen.generate_passphrase(options)
 
         self.assertEqual(stdout.getvalue().strip(), "alpha bravo")
-
 
 
 class TestWordlistSimilarity(unittest.TestCase):
@@ -960,10 +1007,6 @@ class TestWordlistSimilarity(unittest.TestCase):
         )
 
         self.assertEqual(result, sorted(result))
-
-   
-
-
 
 
 if __name__ == "__main__":
