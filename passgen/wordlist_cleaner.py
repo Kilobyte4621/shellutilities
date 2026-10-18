@@ -215,7 +215,7 @@ def clean_wordlists(
     sources,
     destination,
     encoding="auto",
-    min_length=5,
+    min_length=4,
     memo=False,
     memo_distance=2,
 ):
@@ -344,9 +344,9 @@ def main():
     parser.add_argument(
         "--min-length",
         type=positive_int,
-        default=5,
+        default=4,
         metavar="N",
-        help="Minimum number of letters (default: 5)",
+        help="Minimum number of letters (default: 4)",
     )
     parser.add_argument(
         "--memo",
