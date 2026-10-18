@@ -445,11 +445,13 @@ def passphrase_position_entropy(words, alphabet, modified_probability):
     )
 
 
+
 def generation_choice_entropy(
     words,
     word_count,
     random_count,
     alphabet_size,
+    average_position_entropy=None,
 ):
     """Calculate entropy of the generator's random choices.
 
@@ -461,25 +463,28 @@ def generation_choice_entropy(
     if random_count == 0:
         return word_entropy
 
-    # Uniform selection of R distinct positions among P words.
     selection_entropy = math.log2(
         math.comb(word_count, random_count)
     )
 
-    # Each modified word has a uniformly selected insertion position.
-    # Average over the uniformly selected source word.
-    average_position_entropy = math.fsum(
-        math.log2(
-            len(regex.findall(r"\X", unicodedata.normalize("NFC", word))) + 1
-        )
-        for word in words
-    ) / len(words)
+    if average_position_entropy is None:
+        average_position_entropy = math.fsum(
+            math.log2(
+                len(regex.findall(
+                    r"\X",
+                    unicodedata.normalize("NFC", word),
+                )) + 1
+            )
+            for word in words
+        ) / len(words)
 
     insertion_entropy = random_count * (
         math.log2(alphabet_size) + average_position_entropy
     )
 
     return word_entropy + selection_entropy + insertion_entropy
+
+
 
 
 def required_word_count(
@@ -491,12 +496,26 @@ def required_word_count(
     """Find the smallest word count meeting the generation-choice entropy target."""
     first_candidate = max(1, random_count)
 
+    average_position_entropy = None
+
+    if random_count > 0:
+        average_position_entropy = math.fsum(
+            math.log2(
+                len(regex.findall(
+                    r"\X",
+                    unicodedata.normalize("NFC", word),
+                )) + 1
+            )
+            for word in words
+        ) / len(words)
+
     for candidate in range(first_candidate, MAX_LENGTH + 1):
         entropy = generation_choice_entropy(
             words,
             candidate,
             random_count,
             alphabet_size,
+            average_position_entropy,
         )
 
         if entropy >= target_entropy:
@@ -505,6 +524,7 @@ def required_word_count(
     raise ValueError(
         "Target entropy exceeds supported word count"
     )
+
 
 
 def generate_passphrase(options):
