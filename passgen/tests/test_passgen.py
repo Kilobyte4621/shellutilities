@@ -655,29 +655,20 @@ class TestWordlistSimilarity(unittest.TestCase):
 
         return previous[-1]
 
+    
     @classmethod
     def reference_filter(cls, words, max_distance=2):
-        """Exhaustive reference without the signature index."""
-        words = sorted(words)
-        parent = list(range(len(words)))
+        """Simple exhaustive reference for greedy similarity filtering."""
+        ordered_words = sorted(
+            set(words),
+            key=lambda word: (len(word), word),
+        )
+        accepted = []
 
-        def find(index):
-            while parent[index] != index:
-                parent[index] = parent[parent[index]]
-                index = parent[index]
-            return index
+        for word in ordered_words:
+            is_similar = False
 
-        def union(first, second):
-            root_first = find(first)
-            root_second = find(second)
-
-            if root_first != root_second:
-                parent[root_second] = root_first
-
-        for index, word in enumerate(words):
-            for other_index in range(index):
-                other = words[other_index]
-
+            for other in accepted:
                 threshold = (
                     1
                     if max(len(word), len(other)) <= 5
@@ -687,24 +678,15 @@ class TestWordlistSimilarity(unittest.TestCase):
                 if abs(len(word) - len(other)) > threshold:
                     continue
 
-                if (
-                    cls.reference_levenshtein(word, other)
-                    <= threshold
-                ):
-                    union(index, other_index)
+                if cls.reference_levenshtein(word, other) <= threshold:
+                    is_similar = True
+                    break
 
-        representatives = {}
+            if not is_similar:
+                accepted.append(word)
 
-        for index, word in enumerate(words):
-            root = find(index)
-            current = representatives.get(root)
+        return sorted(accepted)
 
-            if current is None or (len(word), word) < (
-                len(current), current
-            ):
-                representatives[root] = word
-
-        return sorted(representatives.values())
 
     def test_levenshtein_known_distances(self):
         cases = [
@@ -775,16 +757,21 @@ class TestWordlistSimilarity(unittest.TestCase):
 
         self.assertEqual(result, sorted(result))
 
-    def test_transitive_grouping(self):
-        # cat and coat are distance 2 apart, but both connect
-        # through cot under the short-word threshold of 1.
-        words = ["cat", "cot", "coat"]
+    
+    def test_similar_chain_does_not_remove_distant_endpoint(self):
+        """A rejected intermediate word must not remove distant endpoints."""
+        words = ["abcdef", "abcxef", "xbcxef"]
 
         result = wordlist_cleaner.filter_memorable_words(
-            words, max_distance=2
+            words,
+            max_distance=2,
         )
 
-        self.assertEqual(result, ["cat"])
+        self.assertEqual(
+            result,
+            self.reference_filter(words, max_distance=2),
+        )
+
 
     def test_distant_words_are_preserved(self):
         words = ["alpha", "quartz", "window", "zebra"]
@@ -889,6 +876,74 @@ class TestWordlistSimilarity(unittest.TestCase):
         )
 
         self.assertEqual(actual, expected)
+
+    
+    def test_kept_words_are_pairwise_dissimilar(self):
+        words = [
+            "abcdef",
+            "abcxef",
+            "abcxgh",
+            "planet",
+            "planer",
+            "elephant",
+            "giraffe",
+        ]
+
+        result = wordlist_cleaner.filter_memorable_words(
+            words,
+            max_distance=2,
+        )
+
+        for index, first in enumerate(result):
+            for second in result[index + 1:]:
+                threshold = (
+                    1
+                    if max(len(first), len(second)) <= 5
+                    else 2
+                )
+
+                self.assertGreater(
+                    wordlist_cleaner.levenshtein_distance(
+                        first, second
+                    ),
+                    threshold,
+                    msg=f"Similar words both retained: {first!r}, {second!r}",
+                )
+
+    def test_greedy_filter_is_deterministic(self):
+        words = [
+            "abcxgh",
+            "abcdef",
+            "abcxef",
+            "planet",
+            "planer",
+        ]
+
+        expected = wordlist_cleaner.filter_memorable_words(
+            words,
+            max_distance=2,
+        )
+
+        self.assertEqual(
+            wordlist_cleaner.filter_memorable_words(
+                list(reversed(words)),
+                max_distance=2,
+            ),
+            expected,
+        )
+
+    def test_output_is_alphabetically_sorted(self):
+        words = ["zebra", "apple", "banana", "apples"]
+
+        result = wordlist_cleaner.filter_memorable_words(
+            words,
+            max_distance=2,
+        )
+
+        self.assertEqual(result, sorted(result))
+
+   
+
 
 
 

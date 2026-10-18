@@ -61,37 +61,18 @@ def levenshtein_distance(first, second):
     return previous[-1]
 
 
+
 def filter_memorable_words(words, max_distance=2):
-    """Keep the shortest word in each similarity component."""
-    words = sorted(words)
-    count = len(words)
+    """Greedily keep words that are not too similar to accepted words."""
+    ordered_words = sorted(
+        set(words),
+        key=lambda word: (len(word), word),
+    )
 
-    if count < 2:
-        return words
+    if len(ordered_words) < 2:
+        return ordered_words
 
-    parent = list(range(count))
-    rank = [0] * count
-
-    def find(index):
-        while parent[index] != index:
-            parent[index] = parent[parent[index]]
-            index = parent[index]
-        return index
-
-    def union(first, second):
-        root_first = find(first)
-        root_second = find(second)
-
-        if root_first == root_second:
-            return
-
-        if rank[root_first] < rank[root_second]:
-            root_first, root_second = root_second, root_first
-
-        parent[root_second] = root_first
-
-        if rank[root_first] == rank[root_second]:
-            rank[root_first] += 1
+    accepted = []
 
     def deletion_signatures(word, depth):
         signatures = {word}
@@ -107,19 +88,20 @@ def filter_memorable_words(words, max_distance=2):
 
         return signatures
 
-    # Index deletion signatures to find candidate pairs.
+    # Index signatures of accepted words only.
     signature_index = {}
 
-    for index, word in enumerate(words):
-        depth = min(1, max_distance) if len(word) <= 5 else max_distance
-        signatures = deletion_signatures(word, depth)
+    for word in ordered_words:
+        signatures = deletion_signatures(word, max_distance)
         candidates = set()
 
         for signature in signatures:
             candidates.update(signature_index.get(signature, ()))
 
+        is_similar = False
+
         for other_index in candidates:
-            other_word = words[other_index]
+            other_word = accepted[other_index]
 
             threshold = (
                 1
@@ -131,64 +113,22 @@ def filter_memorable_words(words, max_distance=2):
                 continue
 
             if levenshtein_distance(word, other_word) <= threshold:
-                union(index, other_index)
+                is_similar = True
+                break
+
+        if is_similar:
+            continue
+
+        word_index = len(accepted)
+        accepted.append(word)
 
         for signature in signatures:
-            signature_index.setdefault(signature, []).append(index)
+            signature_index.setdefault(signature, []).append(word_index)
 
-        # Collect connected components.
-    components = {}
+    # The cleaner's output remains alphabetically sorted.
+    return sorted(accepted)
 
-    for index, word in enumerate(words):
-        component = find(index)
-        components.setdefault(component, []).append(word)
 
-    # Keep the shortest word in each connected component.
-    representatives = []
-    group_details = []
-
-    for members in components.values():
-        representative = min(
-            members,
-            key=lambda word: (len(word), word),
-        )
-        representatives.append(representative)
-
-        if len(members) > 1:
-            group_details.append(
-                (len(members), representative, sorted(members))
-            )
-
-    largest_groups = sorted(
-        group_details,
-        key=lambda group: (-group[0], group[1]),
-    )[:10]
-
-    print(
-        f"Memo groups:        {len(components)}",
-        file=sys.stderr,
-    )
-    print(
-        f"Groups with 2+ words: {len(group_details)}",
-        file=sys.stderr,
-    )
-
-    if largest_groups:
-        print("Largest memo groups:", file=sys.stderr)
-
-        for size, representative, members in largest_groups:
-            examples = ", ".join(repr(word) for word in members[:12])
-
-            if len(members) > 12:
-                examples += ", ..."
-
-            print(
-                f"  {size} words; representative={representative!r}: "
-                f"{examples}",
-                file=sys.stderr,
-            )
-
-    return sorted(representatives)
 
 def decode_content(data, requested_encoding):
     if requested_encoding != "auto":
@@ -317,6 +257,10 @@ def clean_wordlists(
             word = normalize_word(entry)
 
             if not word:
+                continue
+
+            if "\uFFFD" in word:
+                rejected_count += 1
                 continue
 
             if not keep_all and (
