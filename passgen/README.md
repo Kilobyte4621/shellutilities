@@ -1,287 +1,219 @@
-# passgen (v0.0.6)
+# passgen (v0.1)
 
 **A cryptographically secure password and passphrase generator for the command line.**
 
-`passgen` is a lightweight Python utility for generating random passwords and passphrases using Python's `secrets` module. It supports configurable character classes, minimum entropy targets, custom wordlists, selectable word separators, and optional random-character insertion into passphrases.
+`passgen` is a Python command-line utility for generating passwords and passphrases using Python's `secrets` module. It supports configurable password character classes, target entropy values, custom wordlists, configurable word separators, and optional random-character insertion into passphrases.
 
-The project also includes `wordlist_cleaner.py`, a companion utility for normalizing and deduplicating wordlists before using them to generate passphrases.
+The repository also includes `wordlist_cleaner.py`, a companion utility for normalizing, filtering, deduplicating, and optionally consolidating similar wordlist entries.
 
-The goal is to provide secure defaults for everyday use while keeping customization, entropy estimation, testing, and wordlist maintenance straightforward.
+The project aims to provide secure random generation, explicit entropy reporting, and practical tools for preparing wordlists.
 
 ## Features
 
-- Cryptographically secure random selection using Python's `secrets` module.
-- Four character classes for passwords: lowercase letters, uppercase letters, digits, and special characters.
-- All four character classes enabled by default for password generation.
-- Optional character-class selection for custom password policies.
-- Password generation by exact length or minimum entropy target.
-- Passphrase generation by exact word count or minimum entropy target.
-- Optional insertion of one random character into a specified number of distinct passphrase words.
-- Random selection of modified word positions, insertion characters, and insertion positions.
-- Entropy estimation that accounts for password character-class constraints.
-- Generation-choice entropy estimation for passphrases using random-character insertion.
+- Cryptographically secure random choices using Python's `secrets` module.
+- Password generation using lowercase letters, uppercase letters, digits, and special characters.
+- All four password character classes enabled by default.
+- Password generation by exact length or target entropy.
+- Passphrase generation by exact word count or target generation-choice entropy.
+- Optional insertion of one random character into a specified number of distinct passphrase word positions with `-R`.
 - Custom wordlists and configurable passphrase separators.
-- UTF-8 wordlists supported, including files with a UTF-8 BOM.
-- Automatic removal of duplicate word entries during passphrase generation.
-- Wordlist preprocessing with `wordlist_cleaner.py`.
-- Unicode normalization and case-insensitive deduplication in the cleaner.
-- Cleaning reports with counts of blank lines, removed duplicates, and unique entries.
-- Original wordlists are preserved by default.
-- Passwords and passphrases written to standard output; metadata written to standard error.
+- Duplicate and blank-line removal when loading a wordlist.
+- Unicode normalization when loading passphrase wordlists and inserting characters.
+- A wordlist cleaner that supports individual files or directories, including optional recursive discovery.
+- Configurable input encoding and minimum word length in the cleaner.
+- Optional filtering of orthographically similar words for memorability.
 - Unit tests using Python's built-in `unittest` framework.
-- No third-party Python dependencies.
+
+> **Development note:** Changes to the `-R` behavior and the planned `-C` and `-Cc` options are being considered. Until those changes are implemented, use the documented behavior of the current release.
 
 ## Requirements
 
-- Python 3.8 or newer.
-- A Unix-like environment with a shell for the provided wrapper.
+- Python 3.
+- The third-party Python package [`regex`](https://pypi.org/project/regex/), used for Unicode grapheme-cluster handling by `passgen.py`.
+- A shell to use the optional Bash helper functions.
 
-The Python scripts can also be invoked directly on systems where Python 3 is available.
+`wordlist_cleaner.py` uses the Python standard library. The generator requires `regex`.
 
 ## Installation
 
-Place the project files in your preferred scripts directory. For example:
+Clone or copy the repository to a directory of your choice. Create a virtual environment and install the dependency:
+
+```bash
+cd ~/scripts/shellutilities/passgen
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+The `requirements.txt` file contains the generator's external dependency.
+
+Run the generator directly:
+
+```bash
+.venv/bin/python passgen.py --help
+```
+
+Run the cleaner's help:
+
+```bash
+.venv/bin/python wordlist_cleaner.py --help
+```
+
+The default passphrase wordlist is `wordlist.csv` in the same directory as `passgen.py`. Despite the filename extension, it is a newline-delimited text file, with one word per line; it is not parsed as a comma-separated CSV table.
+
+### Optional Bash helpers
+
+The repository includes shell helper functions for convenience. The `passgen.sh` helper currently uses the absolute path:
 
 ```text
-passgen/
-├── passgen.py
-├── passgen.sh
-├── wordlist_cleaner.py
-├── wordlist.csv
-└── tests/
-    └── test_passgen.py
+$HOME/scripts/shellutilities/passgen/.venv/bin/python
+$HOME/scripts/shellutilities/passgen/passgen.py
 ```
 
-The default `wordlist.csv` is a newline-delimited wordlist, not a conventional comma-separated CSV table.
-
-Make the Python scripts executable:
-
-```bash
-chmod +x ~/scripts/shellutilities/passgen/passgen.py
-chmod +x ~/scripts/shellutilities/passgen/wordlist_cleaner.py
-```
-
-The provided shell wrapper defines a `passgen` function that invokes the password generator. If your shell automatically loads functions from `~/scripts`, ensure the wrapper is loaded by your shell configuration.
-
-Alternatively, invoke the generator directly:
-
-```bash
-python3 ~/scripts/shellutilities/passgen/passgen.py -L 32
-```
-
-Check the available generator options:
-
-```bash
-passgen --help
-```
-
-Check the wordlist cleaner options:
-
-```bash
-python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py --help
-```
+Adjust those paths if your checkout is in a different location. The test helpers are in `tests/test_passgen.sh` and `tests/test_wordlist_cleaner.sh`; they also expect the repository's virtual environment in the layout shown by the scripts.
 
 ## Password generation
 
-### Default behavior
+### Default character classes
 
-When no character classes are specified, `passgen` uses all four classes:
-
-- Lowercase letters: `a-z`
-- Uppercase letters: `A-Z`
-- Digits: `0-9`
-- Special characters: `!@#$%^&*()-_=+[]{}:,.?/`
-
-Generate a 32-character password:
-
-```bash
-passgen -L 32
-```
-
-Generate a password with at least 128 bits of entropy:
-
-```bash
-passgen -E 128
-```
-
-Every generated password must contain at least one character from each selected class.
-
-### Character classes
-
-Character classes can be combined in a single argument or specified separately.
+When no character classes are specified, all four classes are enabled:
 
 | Option | Character class |
 |---|---|
-| `-a` | Lowercase letters |
-| `-A` | Uppercase letters |
-| `-0` | Digits |
-| `-!` | Special characters |
+| `-a` | Lowercase ASCII letters (`a-z`) |
+| `-A` | Uppercase ASCII letters (`A-Z`) |
+| `-0` | Digits (`0-9`) |
+| `-!` | Special characters: `!@#$%^&*()-_=+[]{}:,.?/` |
 
-When specifying classes, only the selected classes are used. The default four-class policy is replaced by the explicitly selected classes.
+Every generated password must contain at least one character from each selected class.
 
-For example, generate a password containing only lowercase letters and digits:
-
-```bash
-passgen -a0 -L 24
-```
-
-Generate a password using uppercase and lowercase letters:
+Generate a 32-character password using the default classes:
 
 ```bash
-passgen -aA -E 128
+.venv/bin/python passgen.py -L 32
 ```
 
-Generate a password using digits and special characters:
+Generate a password with a target entropy of at least 128 bits:
 
 ```bash
-passgen '-0!' -L 20
+.venv/bin/python passgen.py -E 128
 ```
 
-**Note:** Quote arguments containing special characters when invoking the command from a shell. This prevents shell expansion and interpretation of characters such as `!`, `*`, `$`, and `&`.
+### Select character classes
 
-### Exact length
-
-Use `-L` to specify the exact number of characters:
+Specify one or more classes to replace the default four-class policy. Class options can be combined:
 
 ```bash
-passgen -L 32
+# Lowercase letters and digits
+.venv/bin/python passgen.py -a0 -L 24
+
+# Uppercase and lowercase letters
+.venv/bin/python passgen.py -aA -E 128
+
+# Digits and special characters
+.venv/bin/python passgen.py '-0!' -L 20
 ```
 
-The length must be between 1 and 4096. The password must also be long enough to include at least one character from every selected class. For example, the default four-class configuration cannot generate a valid password shorter than four characters.
+Quote arguments containing shell-special characters, especially `!`, `*`, `$`, and `&`, to prevent shell interpretation.
 
-### Entropy target
+### Exact length: `-L`
 
-Use `-E` to specify the minimum desired password entropy in bits:
+`-L N` requests a password of exactly `N` characters. The supported maximum length is 4096 characters. The length must be sufficient to include at least one character from each selected class. For example, with all four default classes enabled, a password shorter than four characters cannot satisfy the class requirements.
 
 ```bash
-passgen -E 128
+.venv/bin/python passgen.py -L 32
 ```
 
-The generator determines the shortest supported length whose number of valid passwords meets the requested entropy target.
+### Target entropy: `-E`
 
-The reported entropy can exceed the requested value because password length is an integer.
+`-E N` asks the generator to find the shortest supported password length whose valid password space reaches at least `N` bits of entropy.
+
+```bash
+.venv/bin/python passgen.py -E 128
+```
+
+The reported value may be higher than the requested target because password lengths are whole numbers.
+
+Password mode requires exactly one of `-L` or `-E`.
 
 ## Passphrase generation
 
-Passphrases are generated by independently selecting words from a wordlist using `secrets.choice()`.
+Passphrases are created by independently selecting words from the configured wordlist. Selection is with replacement, so the same word can occur more than once.
 
-Word selection is performed with replacement, so the same word may appear more than once in a passphrase.
+### Exact word count: `-p`
 
-### Exact word count
-
-Use `-p` to specify the number of words:
+Use `-p N` to generate exactly `N` words:
 
 ```bash
-passgen -p 6
+.venv/bin/python passgen.py -p 6
 ```
 
-By default, words are joined with a hyphen. To use spaces instead:
+The default separator is a hyphen. Set a different non-empty separator with `-d`:
 
 ```bash
-passgen -p 6 -d ' '
+# Separate words with spaces
+.venv/bin/python passgen.py -p 6 -d ' '
+
+# Separate words with underscores
+.venv/bin/python passgen.py -p 6 -d '_'
 ```
 
-A custom separator can be any non-empty string:
+Words in the loaded wordlist that contain the selected separator are rejected, so a separator cannot be confused with part of a word.
+
+### Target generation-choice entropy
+
+Use `--passphrase -E N` to choose the smallest supported word count whose estimated **generation-choice entropy** reaches the requested target:
 
 ```bash
-passgen -p 5 -d '_'
+.venv/bin/python passgen.py --passphrase -E 128
 ```
 
-The output metadata includes the number of words, total character count including and excluding separators, wordlist size, and estimated entropy.
+The `--passphrase` option is required when using `-E` to request passphrase entropy. Passphrase mode can instead use `-p N` to specify an exact word count, but `-p` and `-E` cannot be combined.
 
-### Entropy target
+The maximum supported word count is 4096.
 
-Use `--passphrase -E` to request a minimum passphrase entropy:
+### Random-character insertion: `-R`
+
+`-R N` inserts exactly one randomly selected character into each of `N` distinct word positions in the generated passphrase.
 
 ```bash
-passgen --passphrase -E 128
+# Insert a character into one of six words
+.venv/bin/python passgen.py -p 6 -R 1
+
+# Insert characters into two distinct words
+.venv/bin/python passgen.py -p 6 -R 2
+
+# Insert one character into every word
+.venv/bin/python passgen.py -p 6 -R 6
+
+# Combine insertion with a target entropy
+.venv/bin/python passgen.py --passphrase -E 128 -R 2
 ```
 
-The generator calculates the smallest supported word count whose **generation-choice entropy** meets the requested target, rounding up to a whole number of words. This estimates the entropy of the generator's internal random choices, not necessarily the exact entropy of the final passphrase string. With random-character insertion (`-R` greater than zero), different random choices can produce identical output strings, particularly when Unicode normalization causes collisions.
-
-For example, if the wordlist contains 46,201 distinct words, each independently selected word contributes approximately 15.50 bits of entropy. A 128-bit target therefore requires nine words, providing approximately 139.46 bits without random-character insertion.
-
-The number of words is limited to 4096.
-
-### Random-character insertion (`-R`)
-
-The `-R N` option inserts exactly one cryptographically random character into each of `N` distinct words in the generated passphrase.
-
-The character is inserted at a randomly selected position within the word. Existing characters are preserved; no original character is replaced or removed.
-
-#### Usage
-
-Insert a random character into one of six words:
-
-```bash
-passgen -p 6 -R 1
-```
-
-Insert random characters into two distinct words:
-
-```bash
-passgen -p 6 -R 2
-```
-
-Insert one random character into every word:
-
-```bash
-passgen -p 6 -R 6
-```
-
-Combine insertion with an entropy target:
-
-```bash
-passgen --passphrase -E 128 -R 2
-```
-
-Use a custom separator:
-
-```bash
-passgen -p 6 -R 2 -d '_'
-```
-
-#### Behavior and constraints
+Current behavior and constraints:
 
 - `-R` defaults to `0`, which means no characters are inserted.
-- Each modified word receives exactly one inserted character.
-- The generator selects `N` distinct word positions randomly, without replacement. A word position cannot be selected more than once.
-- The inserted character and its position within the word are selected using Python's `secrets` module.
-- Characters present in the configured separator are excluded from the insertion alphabet. This prevents an inserted character from being confused with a word separator.
-- `-R` cannot exceed the generated word count.
-- The supported value of `-R` is between 0 and 4096, subject to the word-count constraint.
+- Each selected word position receives exactly one inserted character.
+- The `N` positions are selected without replacement, so no position is selected more than once.
+- The character and its insertion position are chosen using Python's `secrets` module.
+- Characters that appear in the configured separator are excluded from the insertion alphabet.
+- `-R` cannot exceed the number of words in the passphrase.
+- The supported maximum for `-R` is 4096, subject to the word-count constraint.
 - `-R` is a passphrase option and cannot be combined with password character classes or `-L`.
 
-When using `-p N`, the word count is exactly `N`.
+When used with `-p N`, the output contains exactly `N` words. When used with `--passphrase -E BITS`, the generator chooses a word count that reaches the target and accommodates the requested number of modified positions.
 
-When using `--passphrase -E BITS`, the generator calculates the smallest supported word count that meets the target for the selected `-R` value. The chosen word count is at least as large as `N` in `-R N`, because each modified position must correspond to a generated word.
+**Planned changes:** The behavior of `-R` may evolve, and the `-C` and `-Cc` options are planned features. They are not documented as available options in this release.
 
-#### Entropy reporting with `-R`
+### Understanding passphrase entropy
 
-The program reports `Generation-choice entropy` for both `-R 0` and `-R` greater than zero.
-- Without insertion, this value equals the final output entropy under the documented model, assuming distinct normalized wordlist entries and an unambiguous fixed separator.
-- With insertion, different internal random choices can produce identical output strings, so generation-choice entropy may exceed final output entropy. The calculation accounts for:
-
-1. Independent word selections from the wordlist.
-2. Selection of distinct word positions to modify.
-3. Random inserted-character choices.
-4. Random insertion positions within the selected words.
-
-Let:
-
-- \(W\) be the number of distinct words in the wordlist.
-- \(P\) be the number of generated words.
-- \(R\) be the number of modified word positions.
-- \(A\) be the size of the available insertion alphabet.
-- \(L_i\) be the length of word \(i\) in the wordlist.
-
-For `R = 0`, the estimated entropy is:
+For a wordlist with \(W\) distinct entries and a passphrase containing \(P\) independently selected words, the base generation-choice entropy is:
 
 \[
 H = P\log_2(W)
 \]
 
-For `R > 0`, the generation-choice entropy is calculated as:
+With random-character insertion, the reported generation-choice entropy also accounts for the choice of distinct positions, inserted characters, and insertion positions. In the implementation, the estimate for `R > 0` is:
 
 \[
 H = P\log_2(W)
@@ -290,315 +222,199 @@ H = P\log_2(W)
 \frac{1}{W}\sum_{i=1}^{W}\log_2(L_i+1)\right)
 \]
 
-The insertion-position term uses the average over the wordlist because the specific words are selected randomly.
+where:
 
-**Important:** Generation-choice entropy describes the entropy of the generator's internal random choices. It is not necessarily the exact entropy of the final output string, because different internal choices can theoretically produce identical strings.
+- \(W\) is the number of distinct words in the loaded wordlist.
+- \(P\) is the number of words in the passphrase.
+- \(R\) is the number of modified word positions.
+- \(A\) is the size of the available insertion alphabet after separator characters are excluded.
+- \(L_i\) is the number of grapheme clusters in word \(i\).
 
-The `-E` option specifies a minimum target, not an exact value. The reported estimate may exceed the requested target.
+**Generation-choice entropy is not necessarily the exact entropy of the final output string.** Different internal random choices can produce the same output string, including because of Unicode normalization. The displayed value describes the generator's modeled random choices and should not be interpreted as a proof of the final string's exact Shannon entropy.
 
-### Custom wordlists
+The `-E` option specifies a minimum target, not an exact value. The reported estimate may exceed it because the number of words is an integer.
 
-By default, `passgen` reads `wordlist.csv` from the same directory as `passgen.py`.
+## Custom wordlists
 
-Specify another wordlist with `--wordlist`:
-
-```bash
-passgen -p 6 --wordlist ~/my-wordlist.txt
-```
-
-Or combine a custom wordlist with an entropy target:
+By default, `passgen.py` loads `wordlist.csv` from the directory containing the script. Supply another file with `--wordlist`:
 
 ```bash
-passgen --passphrase -E 160 --wordlist ~/my-wordlist.txt
+.venv/bin/python passgen.py -p 6 --wordlist ~/my-wordlist.txt
 ```
 
-The wordlist format is **one word or entry per line**, not a comma-separated CSV table, despite the default filename extension.
+Or combine a custom wordlist with a target entropy:
 
-Wordlists must be valid UTF-8 text and contain at least two distinct non-empty entries. UTF-8 files with or without a byte-order mark (BOM) are supported. Blank lines and duplicate entries are ignored during passphrase generation, and punctuation within entries is preserved.
+```bash
+.venv/bin/python passgen.py --passphrase -E 160 \
+  --wordlist ~/my-wordlist.txt
+```
 
-For reliable entropy estimates, use a wordlist with sufficient size and entries appropriate for your intended use. Avoid wordlists with predictable or heavily biased content.
+The file must be UTF-8 text, with one entry per line. UTF-8 files with or without a byte-order mark (BOM) are supported. Blank lines and duplicate entries are ignored when the wordlist is loaded. Entries are NFC-normalized, and at least two distinct words are required. A wordlist entry containing the selected separator is not allowed for a generated passphrase.
+
+For dependable estimates, use a wordlist with known selection properties and enough distinct entries. The entropy estimate assumes uniform selection from the distinct loaded entries.
 
 ## Wordlist cleaner
 
-`wordlist_cleaner.py` is a standalone utility for preparing a wordlist before using it with `passgen`.
+`wordlist_cleaner.py` prepares wordlists for use with `passgen`. It accepts either an input file or a directory. It can extract entries from recognized Diceware-style records or treat a file as a simple one-entry-per-line list.
 
-It reads a newline-delimited UTF-8 text file, normalizes each entry, removes duplicates, and writes a cleaned wordlist. The original file is not modified.
-
-### What it does
-
-The cleaner applies the following operations in order:
-
-1. Reads UTF-8 text, accepting files with or without a UTF-8 BOM.
-2. Removes leading and trailing whitespace from each line.
-3. Discards blank lines.
-4. Normalizes Unicode text to NFC.
-5. Converts entries to lowercase using Python's Unicode-aware `casefold()`.
-6. Normalizes the result to NFC again.
-7. Removes duplicate entries while preserving the order of their first normalized occurrence.
-8. Writes the resulting entries as UTF-8 without a BOM, using one entry per line.
-9. Reads the output back and verifies that the contents match the generated entries and contain no duplicates.
-
-Internal punctuation and accents are preserved. The cleaner does not remove hyphens, apostrophes, or other punctuation automatically.
-
-Because `casefold()` performs more comprehensive case normalization than `lower()`, some Unicode strings that differ in spelling or representation may be treated as equivalent. For example, `Straße` and `STRASSE` normalize to the same entry, `strasse`.
-
-Unicode NFC normalization unifies canonically equivalent representations of characters without removing accents. Therefore, `café` and `cafe` remain distinct entries.
+The cleaner does not intentionally modify source files. It writes a separate output file, normalizes and filters entries, removes duplicates, sorts the result alphabetically, and validates the written output.
 
 ### Basic usage
 
-Run the cleaner on the default wordlist:
+Clean a single file:
 
 ```bash
-python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py \
-  ~/scripts/shellutilities/passgen/wordlist.csv
+.venv/bin/python wordlist_cleaner.py ~/wordlists/source.txt
 ```
 
-By default, the output filename is derived from the input filename. For example:
-
-```text
-wordlist.csv -> wordlist.unique.txt
-```
-
-The source file remains unchanged.
-
-### Specify an output path
-
-Use `-o` or `--output` to choose the destination:
+Clean files from a directory:
 
 ```bash
-python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py \
-  ~/scripts/shellutilities/passgen/wordlist.csv \
-  --output ~/wordlists/wordlist.unique.txt
+.venv/bin/python wordlist_cleaner.py ~/wordlists
 ```
 
-The output directory is created if necessary.
+For a directory input, the default output is written to the current working directory as `wordlist.unique.txt` (or `wordlist.memo.txt` when `--memo` is enabled). For a file input, the default output name is based on the input filename, such as `source.unique.txt` or `source.memo.txt`.
 
-The input and output paths must be different. The cleaner rejects a result containing fewer than two unique non-empty entries.
-
-### Example
-
-Suppose the source wordlist contains:
-
-```text
- Apple
-apple
-CAFÉ
-café
-cafe
-Straße
-STRASSE
-mother-in-law
-
-```
-
-The cleaned output will be:
-
-```text
-apple
-café
-cafe
-strasse
-mother-in-law
-```
-
-The first normalized occurrence of each unique entry is retained. Duplicate entries and blank lines are discarded.
-
-### Cleaner report
-
-The cleaner writes a summary to standard error, including:
-
-- Total input lines.
-- Blank lines discarded.
-- Duplicate entries removed.
-- Unique entries written.
-- Output file path.
-
-For example:
-
-```text
-Input lines:          8
-Blank lines:          1
-Duplicates removed:  2
-Unique entries:       5
-Output file:          wordlist.unique.txt
-```
-
-The numbers depend on the input file.
-
-### Use the cleaned wordlist with passgen
-
-Once the cleaned wordlist has been generated, pass it to the generator explicitly:
+Specify the output explicitly with `-o` or `--output`:
 
 ```bash
-passgen --passphrase -E 128 \
-  --wordlist ~/scripts/shellutilities/passgen/wordlist.unique.txt
+.venv/bin/python wordlist_cleaner.py ~/wordlists/source.txt \
+  --output ~/wordlists/cleaned.txt
 ```
 
-Or generate a fixed number of words:
+The output directory is created if needed. The input and output paths must differ.
+
+### Encoding
+
+The default `--encoding auto` mode attempts to decode input using UTF-8 (including UTF-8 BOM handling), Windows-1252, and ISO-8859-1. Alternatively, specify an encoding:
 
 ```bash
-passgen -p 6 \
-  --wordlist ~/scripts/shellutilities/passgen/wordlist.unique.txt
+.venv/bin/python wordlist_cleaner.py source.txt --encoding utf-8
+.venv/bin/python wordlist_cleaner.py source.txt --encoding windows-1252
+.venv/bin/python wordlist_cleaner.py source.txt --encoding iso-8859-1
 ```
 
-Cleaning the wordlist beforehand makes its contents easier to inspect and ensures that case variants and canonically equivalent Unicode entries do not inflate the reported wordlist size.
+Output is written as UTF-8 text.
 
-**Important:** Cleaning is a preprocessing step, not a substitute for choosing a suitable wordlist. The estimated passphrase entropy depends on the number of distinct entries remaining after normalization and on the generator's uniform selection process.
+### Minimum length and accepted entries
 
-## Understanding entropy
+`--min-length N` sets the minimum word length. The default is four letters:
 
-Entropy estimates describe the size of the generator's possible output space, assuming uniformly random selection and the generation rules implemented by the script.
+```bash
+.venv/bin/python wordlist_cleaner.py source.txt --min-length 5
+```
 
-### Password entropy
+The cleaner normalizes entries using Unicode normalization and case folding, but its accepted output words are restricted to ASCII alphabetic characters. Entries containing non-ASCII letters, digits, punctuation, symbols, replacement characters, or fewer than the configured minimum number of letters are rejected. The output is normalized to lowercase and sorted alphabetically.
 
-For a password of length \(L\), let \(N\) be the number of valid passwords that satisfy the selected character-class requirements.
+### Recursive directory processing
 
-The reported entropy is:
+Use `-R` or `--recursive` to search a directory and its subdirectories:
 
-\[
-H = \log_2(N)
-\]
+```bash
+.venv/bin/python wordlist_cleaner.py ~/wordlists --recursive
+```
 
-The calculation accounts for the requirement that every selected character class appears at least once.
+Without this option, directory processing is non-recursive.
 
-Consequently, entropy is not necessarily equal to length multiplied by the logarithm of the combined alphabet size: the mandatory class requirements reduce the set of valid outputs.
+### Similar-word filtering for memorability
 
-### Passphrase entropy without insertion
+Use `--memo` to remove orthographically similar words from the cleaned list:
 
-For a wordlist containing \(W\) distinct entries and a passphrase containing \(P\) independently selected words, the estimated entropy is:
+```bash
+.venv/bin/python wordlist_cleaner.py ~/wordlists --memo
+```
 
-\[
-H = P\log_2(W)
-\]
+`--memo-distance` controls the maximum edit distance used for filtering:
 
-This calculation assumes each distinct entry has an equal probability of selection, words are selected independently, and repetition is allowed.
+```bash
+.venv/bin/python wordlist_cleaner.py ~/wordlists \
+  --memo --memo-distance 1
+```
 
-The separator does not contribute entropy because it is fixed by the user.
+Allowed distances are `1` and `2`; the default is `2`. Short words use a maximum edit distance of `1` when comparing words whose maximum length is five or fewer characters. The filtering is greedy and deterministic: candidates are considered in order of length and then alphabetically, and the final accepted list is sorted alphabetically. This option can substantially reduce the number of retained entries.
 
-### Interpreting the output
+### Cleaner report and safety checks
 
-The generated password or passphrase is printed to standard output. Metadata is printed to standard error.
+The cleaner writes a report to standard error. Depending on the input and options, the report includes source files, line counts, blank lines, detected input formats, accepted and rejected entries, duplicates removed, similar words removed, and the destination path.
 
-Password example:
+It reads source data before writing the final result, checks that at least two unique entries remain, writes UTF-8 output with LF line endings, and reads the output back to verify that its contents match the generated list and contain no duplicates.
+
+## Output and entropy reporting
+
+The generated password or passphrase is written to standard output. Generation metadata and cleaner reports are written to standard error, allowing the secret and diagnostic information to be redirected separately.
+
+Example password metadata:
 
 ```text
 Length: 32 characters | Entropy: 205.07 bits
 ```
 
-Passphrase example without insertion:
+Example passphrase metadata:
 
 ```text
-Words: 9 | Characters: 76 (including separators), 68 (excluding separators) | Wordlist: 46201 distinct words | Entropy: 139.46 bits
+Words: 6 | Characters: 52 (including separators), 46 (excluding separators) | Wordlist: 10000 distinct words | Generation-choice entropy: 90.00 bits
 ```
 
-Passphrase example with insertion:
+The values above are illustrative; actual values depend on the wordlist and options. Character counts describe the generated output, including any inserted characters. A fixed separator increases the output length but does not add entropy.
 
-```text
-Words: 7 | Characters: 52 (including separators), 46 (excluding separators) | Wordlist: 46201 distinct words | Generation-choice entropy: 131.31 bits
-```
-
-The exact values depend on the wordlist, separator, and selected options.
-
-The character count is the length of the actual generated passphrase. The count including separators reflects the final output string; the count excluding separators is the combined length of the generated words after any insertions.
-
-A fixed separator increases the total number of characters but does not increase entropy.
-
-Separating the secret from the metadata allows the generated value to be captured independently.
+Password entropy is calculated from the number of valid strings satisfying the selected character-class requirements. Passphrase generation-choice entropy is calculated from the modeled random choices described above.
 
 ## Tests
 
-The project includes unit tests in `tests/test_passgen.py`, implemented with Python's built-in `unittest` framework.
+The project uses Python's built-in `unittest` framework.
 
-### Run the tests
-
-From the `passgen` project directory:
+Run all discovered tests from the repository root:
 
 ```bash
-python3 -m unittest discover -s tests -v
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-The tests can also be run directly by specifying the test module:
+Or run the test modules individually:
 
 ```bash
-python3 -m unittest discover \
-  -s ~/scripts/shellutilities/passgen/tests \
-  -p 'test_*.py' \
-  -v
+.venv/bin/python tests/test_passgen.py
+.venv/bin/python tests/test_wordlist_cleaner.py
 ```
 
-No third-party test framework is required.
+The current tests cover areas including:
 
-### Unit test coverage
+- Password and passphrase argument validation.
+- Passphrase generation-choice entropy calculations and word-count selection.
+- Unicode normalization and entropy effects from insertion collisions.
+- Character insertion at grapheme-cluster boundaries, including combining marks and emoji sequences.
+- Wordlist loading, duplicate removal, separator validation, and minimum wordlist size.
+- Wordlist filtering, minimum length, normalization, and rejection of unsupported entries.
+- Levenshtein distance and the cleaner's similar-word filter, including comparisons against reference implementations.
 
-The current unit tests cover the following areas:
-
-- Validation of `-R`, including invalid values, duplicate options, and invalid combinations.
-- Generation-choice entropy calculations for passphrases with and without random-character insertion.
-- Word-count selection for a requested generation-choice entropy target.
-- Random-character insertion at the beginning, middle, and end of a word.
-- Preservation of original word characters during insertion.
-- Wordlist loading and removal of duplicate entries.
-- Rejection of wordlists with fewer than two distinct entries.
-
-The tests are intended to validate individual functions and argument-validation behavior without depending on specific randomly generated outputs.
-
-### Integration testing
-
-Unit tests do not fully validate the behavior of the complete command-line program. Integration tests should exercise the CLI as a subprocess and verify observable behavior.
-
-Recommended integration-test coverage includes:
-
-- Successful generation with `-p N`, including the exact word count.
-- Correct handling of `-R 0`, `-R 1`, and `-R N`.
-- Exactly `R` distinct word positions receiving one inserted character each.
-- Preservation of each source word's characters after insertion.
-- Correct behavior with custom separators and custom wordlists.
-- Exit status and error messages for invalid arguments, missing files, and invalid wordlists.
-- Agreement between the generated output and reported character counts, both including and excluding separators.
-- `--passphrase -E BITS` meeting the target reported by the entropy calculation for different `-R` values.
-- Separation of generated secrets on standard output from metadata on standard error.
-
-Randomized tests should validate invariants rather than expect specific output strings. A test should not fail merely because a random word, character, or insertion position differs between executions.
-
-**Entropy-test note:** Tests should distinguish the generator's calculated generation-choice entropy from the exact entropy of the final output string. The latter is not directly established by the current formula.
-
-Run the test suite after changes to argument parsing, entropy calculations, wordlist handling, character insertion, or passphrase generation.
+The test suite validates functions and selected behavior with controlled inputs. It does not replace testing the complete CLI in the target environment.
 
 ## Security considerations
 
 ### Randomness
 
-`passgen` uses Python's `secrets` module, which is designed for generating cryptographically strong random values using the operating system's secure randomness source.
-
-It does not use Python's ordinary `random` module for secret generation.
+The generator uses Python's `secrets` module for secret-related random choices. It does not use the ordinary `random` module for password or passphrase generation.
 
 ### Password distribution
 
-Password generation uses rejection sampling: candidate strings are generated from the combined selected alphabet and rejected unless every selected class appears at least once. This produces a uniform distribution over the valid password space, assuming the underlying random selections are uniform.
+Password candidates are sampled and rejected unless every selected character class appears at least once. This rejection-sampling approach is intended to produce a uniform distribution over valid strings, assuming the underlying random choices are uniform.
 
-### Wordlist quality
+### Wordlist quality and entropy
 
-Passphrase entropy depends on the number of distinct entries and the uniform selection process. A large wordlist does not, by itself, guarantee that a passphrase is secure if the selection process is biased or the generated result is exposed.
-
-The cleaner removes duplicates after normalization, but it does not assess word quality, predictability, or linguistic bias.
+The passphrase entropy estimate assumes uniform, independent word selection from the distinct entries loaded by the program. It does not measure whether the source wordlist is predictable or whether its entries were chosen with bias. Cleaning a list does not make a weak or predictable source list secure.
 
 ### Random-character insertion
 
-The `-R` option increases the entropy of the generator's internal choices under the documented model. It does not guarantee a corresponding one-to-one increase in the entropy of the final output string.
-
-Inserted characters are selected from the available insertion alphabet, excluding characters present in the configured separator. The separator itself remains fixed and does not contribute entropy.
+`-R` adds random choices to the generation process, but the entropy of those choices does not necessarily translate one-for-one into the entropy of the final output string. The output may contain collisions, including after Unicode normalization.
 
 ### Handling generated secrets
 
-- Avoid placing actual passwords directly in shell command arguments.
-- Be careful when redirecting output to files, logs, clipboard managers, or other applications.
-- Remember that terminal scrollback and shell pipelines may expose generated secrets.
-- Do not commit generated credentials, private keys, or other secrets to version control.
-- Use a reputable password manager to store generated passwords.
+- Avoid placing real passwords directly in shell command arguments.
+- Take care when redirecting secrets to files, logs, clipboard managers, or other applications.
+- Terminal scrollback and shell pipelines can expose generated values.
+- Do not commit generated credentials or other secrets to version control.
+- Store generated passwords in a reputable password manager.
 
-### Entropy is not a complete security guarantee
-
-The reported entropy is a mathematical estimate based on the implemented generation model. It does not account for endpoint compromise, clipboard exposure, malware, insecure storage, or weaknesses in the service where a password is used.
+Entropy estimates do not protect against endpoint compromise, malware, clipboard exposure, insecure storage, or disclosure to the service where a credential is used.
 
 ## Command reference
 
@@ -606,102 +422,46 @@ The reported entropy is a mathematical estimate based on the implemented generat
 
 | Option | Description |
 |---|---|
-| `-a` | Include lowercase letters |
-| `-A` | Include uppercase letters |
+| `-a` | Include lowercase ASCII letters |
+| `-A` | Include uppercase ASCII letters |
 | `-0` | Include digits |
 | `-!` | Include special characters |
 | `-L N` | Generate a password of exactly `N` characters |
-| `-E N` | Target at least `N` bits of entropy |
-| `-p N` | Generate a passphrase containing exactly `N` words |
-| `-R N` | Insert one random character into `N` distinct words; default: `0` |
-| `--passphrase` | Explicitly select passphrase mode |
-| `-d STRING` | Set the passphrase word separator; default: `-` |
-| `--wordlist PATH` | Use a custom wordlist |
-| `-h`, `--help` | Display usage information |
+| `-E N` | Target password entropy in bits, or passphrase generation-choice entropy in passphrase mode |
+| `-p N` | Generate a passphrase with exactly `N` words |
+| `-R N` | Insert one random character into `N` distinct passphrase word positions; default: `0` |
+| `--passphrase` | Explicitly select passphrase mode; required with passphrase `-E` |
+| `-d STRING` | Set the passphrase separator; default: `-` |
+| `--wordlist PATH` | Use a custom wordlist file |
+| `-h`, `--help` | Show help |
 
-Exactly one of `-L` and `-E` must be supplied in password mode. In passphrase mode, choose either `-p` or `-E`; `--passphrase` is required when using `-E` without `-p`.
-
-Character-class options cannot be combined with passphrase mode. Password and passphrase modes also cannot be mixed with each other.
-
-When `-R` is used with `-p`, its value cannot exceed the word count. When used with `--passphrase -E`, the generator selects a word count sufficient to meet the target and accommodate the requested number of modified positions.
+Password mode requires exactly one of `-L` and `-E`. Passphrase mode requires either `-p` or `-E`; these options cannot be combined. Character-class options and `-L` cannot be combined with passphrase mode.
 
 ### `wordlist_cleaner.py`
 
 | Option | Description |
 |---|---|
-| `INPUT` | Source wordlist file |
-| `-o PATH`, `--output PATH` | Destination file; defaults to `INPUT.unique.txt` |
-| `-h`, `--help` | Display usage information |
-
-The cleaner requires an input path and never intentionally overwrites the source file. It preserves the first occurrence of each normalized entry and validates the written output.
-
-## Examples
-
-```bash
-# Default password policy
-passgen -L 32
-
-# Password with a minimum entropy target
-passgen -E 128
-
-# Lowercase letters and digits only
-passgen -a0 -L 24
-
-# Uppercase and lowercase letters only
-passgen -aA -E 128
-
-# Six-word passphrase, hyphen-separated
-passgen -p 6
-
-# Six-word passphrase, space-separated
-passgen -p 6 -d ' '
-
-# Passphrase with at least 160 bits of estimated entropy
-passgen --passphrase -E 160
-
-# Insert a character into one word
-passgen -p 6 -R 1
-
-# Insert characters into two distinct words
-passgen -p 6 -R 2
-
-# Insert one character into every word
-passgen -p 6 -R 6
-
-# Target at least 128 bits of generation-choice entropy with insertion
-passgen --passphrase -E 128 -R 2
-
-# Passphrase using a custom wordlist
-passgen -p 6 --wordlist ~/my-wordlist.txt
-
-# Clean the default wordlist
-python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py \
-  ~/scripts/shellutilities/passgen/wordlist.csv
-
-# Clean a wordlist to a specific destination
-python3 ~/scripts/shellutilities/passgen/wordlist_cleaner.py \
-  ~/scripts/shellutilities/passgen/wordlist.csv \
-  --output ~/wordlists/wordlist.unique.txt
-
-# Generate a passphrase using the cleaned wordlist
-passgen --passphrase -E 128 \
-  --wordlist ~/scripts/shellutilities/passgen/wordlist.unique.txt
-
-# Run unit tests
-python3 -m unittest discover \
-  -s ~/scripts/shellutilities/passgen/tests \
-  -v
-```
+| `INPUT` | Input wordlist file or directory |
+| `-o PATH`, `--output PATH` | Output path |
+| `--encoding MODE` | Input encoding: `auto`, `utf-8`, `iso-8859-1`, or `windows-1252`; default: `auto` |
+| `--min-length N` | Minimum number of letters; default: `4` |
+| `--memo` | Remove orthographically similar words for memorability |
+| `--memo-distance N` | Maximum edit distance for `--memo`: `1` or `2`; default: `2` |
+| `-R`, `--recursive` | Recursively search subdirectories |
+| `-h`, `--help` | Show help |
 
 ## Limitations
 
 - Maximum password length: 4096 characters.
-- Maximum passphrase length: 4096 words.
-- The number of modified words cannot exceed the generated word count.
-- Wordlists must contain at least two distinct non-empty entries.
-- Wordlists are line-based; CSV parsing is not performed.
-- The cleaner normalizes case and Unicode representation, which can merge some distinct source entries.
-- Entropy estimates rely on uniform random selection and the assumptions described above.
+- Maximum passphrase word count: 4096.
+- `-R` cannot exceed the number of generated words.
+- The passphrase wordlist must contain at least two distinct entries after loading.
+- Wordlists are line-based; the generator does not parse CSV fields.
+- The cleaner's accepted output entries are restricted to ASCII alphabetic words and the configured minimum length.
+- The cleaner's `--memo` mode can significantly reduce the wordlist size.
+- Entropy estimates depend on the generation model and the assumptions described above.
 - Generation-choice entropy is not necessarily the exact entropy of the final passphrase string.
-- Password generation requires at least one character from each selected class.
-- Unit tests alone do not replace integration tests of the complete command-line interface.
+
+## License and wordlist provenance
+
+No license or wordlist provenance is specified in this release's documentation.

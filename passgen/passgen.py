@@ -2,7 +2,7 @@
 """
 passgen — Cryptographically secure password and passphrase generator.
 
-Version: 0.0.6
+Version: 0.1
 """
 
 import itertools
@@ -14,7 +14,7 @@ import unicodedata
 import regex
 from pathlib import Path
 
-__version__ = "0.0.6"
+__version__ = "0.1"
 
 CLASSES = {
     "a": string.ascii_lowercase,
