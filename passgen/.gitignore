@@ -1,6 +1,7 @@
 
 # Generated wordlists
 *.unique.txt
+*.memo.txt
 wordlist.*
 
 # Python bytecode and cache

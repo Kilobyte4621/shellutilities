@@ -263,9 +263,11 @@ def clean_wordlists(
                 rejected_count += 1
                 continue
 
-            if not keep_all and (
-                not word.isalpha() or len(word) < min_length
-            ):
+            if not word.isascii() or not word.isalpha():
+                rejected_count += 1
+                continue
+
+            if not keep_all and len(word) < min_length:
                 rejected_count += 1
                 continue
 
