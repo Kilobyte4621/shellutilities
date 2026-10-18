@@ -517,6 +517,25 @@ class TestEntropy(unittest.TestCase):
                 )
 
 
+class TestInsertionAlphabet(unittest.TestCase):
+    def test_default_separator_is_excluded(self):
+        alphabet = passgen.get_insertion_alphabet("-")
+        self.assertNotIn("-", alphabet)
+
+    def test_custom_separator_characters_are_excluded(self):
+        separator = "A7!"
+        alphabet = passgen.get_insertion_alphabet(separator)
+
+        for character in separator:
+            self.assertNotIn(character, alphabet)
+
+    def test_separator_excluding_entire_alphabet_is_rejected(self):
+        separator = passgen.RANDOM_CHARS
+
+        with self.assertRaisesRegex(ValueError, "separator"):
+            passgen.get_insertion_alphabet(separator)
+
+
 class TestArguments(unittest.TestCase):
 
     def test_random_count_exceeds_word_count(self):
