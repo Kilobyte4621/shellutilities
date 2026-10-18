@@ -35,6 +35,160 @@ def positive_int(value):
 
     return number
 
+def levenshtein_distance(first, second):
+    """Return the Levenshtein edit distance between two words."""
+    if len(first) < len(second):
+        first, second = second, first
+
+    previous = list(range(len(second) + 1))
+
+    for i, char_first in enumerate(first, start=1):
+        current = [i]
+
+        for j, char_second in enumerate(second, start=1):
+            current.append(
+                min(
+                    current[j - 1] + 1,
+                    previous[j] + 1,
+                    previous[j - 1] + (
+                        char_first != char_second
+                    ),
+                )
+            )
+
+        previous = current
+
+    return previous[-1]
+
+
+def filter_memorable_words(words, max_distance=2):
+    """Keep the shortest word in each similarity component."""
+    words = sorted(words)
+    count = len(words)
+
+    if count < 2:
+        return words
+
+    parent = list(range(count))
+    rank = [0] * count
+
+    def find(index):
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(first, second):
+        root_first = find(first)
+        root_second = find(second)
+
+        if root_first == root_second:
+            return
+
+        if rank[root_first] < rank[root_second]:
+            root_first, root_second = root_second, root_first
+
+        parent[root_second] = root_first
+
+        if rank[root_first] == rank[root_second]:
+            rank[root_first] += 1
+
+    def deletion_signatures(word, depth):
+        signatures = {word}
+        frontier = {word}
+
+        for _ in range(depth):
+            frontier = {
+                variant[:position] + variant[position + 1:]
+                for variant in frontier
+                for position in range(len(variant))
+            }
+            signatures.update(frontier)
+
+        return signatures
+
+    # Index deletion signatures to find candidate pairs.
+    signature_index = {}
+
+    for index, word in enumerate(words):
+        depth = min(1, max_distance) if len(word) <= 5 else max_distance
+        signatures = deletion_signatures(word, depth)
+        candidates = set()
+
+        for signature in signatures:
+            candidates.update(signature_index.get(signature, ()))
+
+        for other_index in candidates:
+            other_word = words[other_index]
+
+            threshold = (
+                1
+                if max(len(word), len(other_word)) <= 5
+                else max_distance
+            )
+
+            if abs(len(word) - len(other_word)) > threshold:
+                continue
+
+            if levenshtein_distance(word, other_word) <= threshold:
+                union(index, other_index)
+
+        for signature in signatures:
+            signature_index.setdefault(signature, []).append(index)
+
+        # Collect connected components.
+    components = {}
+
+    for index, word in enumerate(words):
+        component = find(index)
+        components.setdefault(component, []).append(word)
+
+    # Keep the shortest word in each connected component.
+    representatives = []
+    group_details = []
+
+    for members in components.values():
+        representative = min(
+            members,
+            key=lambda word: (len(word), word),
+        )
+        representatives.append(representative)
+
+        if len(members) > 1:
+            group_details.append(
+                (len(members), representative, sorted(members))
+            )
+
+    largest_groups = sorted(
+        group_details,
+        key=lambda group: (-group[0], group[1]),
+    )[:10]
+
+    print(
+        f"Memo groups:        {len(components)}",
+        file=sys.stderr,
+    )
+    print(
+        f"Groups with 2+ words: {len(group_details)}",
+        file=sys.stderr,
+    )
+
+    if largest_groups:
+        print("Largest memo groups:", file=sys.stderr)
+
+        for size, representative, members in largest_groups:
+            examples = ", ".join(repr(word) for word in members[:12])
+
+            if len(members) > 12:
+                examples += ", ..."
+
+            print(
+                f"  {size} words; representative={representative!r}: "
+                f"{examples}",
+                file=sys.stderr,
+            )
+
+    return sorted(representatives)
 
 def decode_content(data, requested_encoding):
     if requested_encoding != "auto":
@@ -123,6 +277,8 @@ def clean_wordlists(
     encoding="auto",
     min_length=3,
     keep_all=False,
+    memo=False,
+    memo_distance=2,
 ):
     destination_resolved = destination.resolve()
     sources = [
@@ -137,7 +293,8 @@ def clean_wordlists(
     unique_words = []
     total_lines = 0
     blank_count = 0
-    filtered_count = 0
+    accepted_count = 0
+    rejected_count = 0
     duplicate_count = 0
     formats = {"diceware": 0, "simple": 0}
 
@@ -165,8 +322,10 @@ def clean_wordlists(
             if not keep_all and (
                 not word.isalpha() or len(word) < min_length
             ):
-                filtered_count += 1
+                rejected_count += 1
                 continue
+
+            accepted_count += 1
 
             if word in seen:
                 duplicate_count += 1
@@ -174,6 +333,17 @@ def clean_wordlists(
 
             seen.add(word)
             unique_words.append(word)
+
+        
+    memo_removed_count = 0
+
+    if memo:
+        original_count = len(unique_words)
+        unique_words = filter_memorable_words(
+            unique_words,
+            max_distance=memo_distance,
+        )
+        memo_removed_count = original_count - len(unique_words)
 
     if len(unique_words) < 2:
         raise ValueError(
@@ -189,8 +359,14 @@ def clean_wordlists(
     print(f"Blank lines:        {blank_count}", file=sys.stderr)
     print(f"Diceware files:     {formats['diceware']}", file=sys.stderr)
     print(f"Simple files:       {formats['simple']}", file=sys.stderr)
-    print(f"Filtered entries:   {filtered_count}", file=sys.stderr)
+    print(f"Accepted entries:   {accepted_count}", file=sys.stderr)
+    print(f"Rejected entries:   {rejected_count}", file=sys.stderr)
     print(f"Duplicates removed:{duplicate_count:>6}", file=sys.stderr)
+    if memo:
+        print(
+            f"Memo words removed: {memo_removed_count}",
+            file=sys.stderr,
+        )
     print(f"Unique entries:     {len(unique_words)}", file=sys.stderr)
     print(f"Output file:        {destination}", file=sys.stderr)
 
@@ -226,10 +402,28 @@ def main():
         metavar="N",
         help="Minimum number of letters (default: 5)",
     )
+    
     parser.add_argument(
         "--keep-all",
         action="store_true",
         help="Keep all extracted contents, including numbers and symbols",
+    )
+
+    parser.add_argument(
+        "--memo",
+        action="store_true",
+        help="Remove orthographically similar words for memorization",
+    )
+    parser.add_argument(
+        "--memo-distance",
+        type=int,
+        choices=(1, 2),
+        default=2,
+        metavar="N",
+        help=(
+            "Maximum edit distance for --memo: 1 or 2 "
+            "(default: 2; short words use a maximum of 1)"
+        ),
     )
 
     args = parser.parse_args()
@@ -244,8 +438,9 @@ def main():
 
     if source.is_file():
         sources = [source]
+        suffix = "memo" if args.memo else "unique"
         default_output = source.with_name(
-            f"{source.stem}.unique.txt"
+            f"{source.stem}.{suffix}.txt"
         )
     elif source.is_dir():
         try:
@@ -260,7 +455,8 @@ def main():
             )
             return 2
 
-        default_output = Path.cwd() / "wordlist.unique.txt"
+        suffix = "memo" if args.memo else "unique"
+        default_output = Path.cwd() / f"wordlist.{suffix}.txt"
     else:
         print(
             f"wordlist_cleaner: error: input is not a regular file "
@@ -276,12 +472,14 @@ def main():
     )
 
     try:
-        clean_wordlists(
+         clean_wordlists(
             sources,
             destination,
             encoding=args.encoding,
             min_length=args.min_length,
             keep_all=args.keep_all,
+            memo=args.memo,
+            memo_distance=args.memo_distance,
         )
     except (ValueError, OSError) as exc:
         print(f"wordlist_cleaner: error: {exc}", file=sys.stderr)

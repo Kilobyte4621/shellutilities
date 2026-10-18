@@ -19,7 +19,7 @@ sys.path.insert(
 )
 
 import passgen
-
+import wordlist_cleaner
 
 
 
@@ -628,6 +628,269 @@ class TestWordlist(unittest.TestCase):
             passgen.generate_passphrase(options)
 
         self.assertEqual(stdout.getvalue().strip(), "alpha bravo")
+
+
+
+class TestWordlistSimilarity(unittest.TestCase):
+
+    @staticmethod
+    def reference_levenshtein(first, second):
+        """Independent reference implementation."""
+        previous = list(range(len(second) + 1))
+
+        for i, char_first in enumerate(first, start=1):
+            current = [i]
+
+            for j, char_second in enumerate(second, start=1):
+                current.append(
+                    min(
+                        current[j - 1] + 1,
+                        previous[j] + 1,
+                        previous[j - 1]
+                        + (char_first != char_second),
+                    )
+                )
+
+            previous = current
+
+        return previous[-1]
+
+    @classmethod
+    def reference_filter(cls, words, max_distance=2):
+        """Exhaustive reference without the signature index."""
+        words = sorted(words)
+        parent = list(range(len(words)))
+
+        def find(index):
+            while parent[index] != index:
+                parent[index] = parent[parent[index]]
+                index = parent[index]
+            return index
+
+        def union(first, second):
+            root_first = find(first)
+            root_second = find(second)
+
+            if root_first != root_second:
+                parent[root_second] = root_first
+
+        for index, word in enumerate(words):
+            for other_index in range(index):
+                other = words[other_index]
+
+                threshold = (
+                    1
+                    if max(len(word), len(other)) <= 5
+                    else max_distance
+                )
+
+                if abs(len(word) - len(other)) > threshold:
+                    continue
+
+                if (
+                    cls.reference_levenshtein(word, other)
+                    <= threshold
+                ):
+                    union(index, other_index)
+
+        representatives = {}
+
+        for index, word in enumerate(words):
+            root = find(index)
+            current = representatives.get(root)
+
+            if current is None or (len(word), word) < (
+                len(current), current
+            ):
+                representatives[root] = word
+
+        return sorted(representatives.values())
+
+    def test_levenshtein_known_distances(self):
+        cases = [
+            ("", "", 0),
+            ("cat", "cat", 0),
+            ("cat", "cot", 1),       # Substitution
+            ("cat", "cats", 1),      # Insertion
+            ("cats", "cat", 1),      # Deletion
+            ("kitten", "sitting", 3),
+            ("book", "back", 2),
+            ("casa", "caas", 2),     # Transposition costs two
+            ("café", "cafe", 1),
+            ("abc", "", 3),
+        ]
+
+        for first, second, expected in cases:
+            with self.subTest(first=first, second=second):
+                self.assertEqual(
+                    wordlist_cleaner.levenshtein_distance(
+                        first, second
+                    ),
+                    expected,
+                )
+
+                self.assertEqual(
+                    self.reference_levenshtein(first, second),
+                    expected,
+                )
+
+    def test_reference_distance_is_symmetric(self):
+        words = [
+            "", "a", "ab", "abc", "casa",
+            "caas", "kitten", "sitting", "café",
+        ]
+
+        for first in words:
+            for second in words:
+                with self.subTest(first=first, second=second):
+                    forward = self.reference_levenshtein(
+                        first, second
+                    )
+                    backward = self.reference_levenshtein(
+                        second, first
+                    )
+
+                    self.assertEqual(forward, backward)
+
+    def test_known_similar_words_are_grouped(self):
+        words = [
+            "cat",
+            "cot",
+            "coat",
+            "quartz",
+            "quarts",
+            "quarxx",
+            "planet",
+            "planets",
+        ]
+
+        result = wordlist_cleaner.filter_memorable_words(
+            words, max_distance=2
+        )
+
+        self.assertEqual(
+            result,
+            self.reference_filter(words, max_distance=2),
+        )
+
+        self.assertEqual(result, sorted(result))
+
+    def test_transitive_grouping(self):
+        # cat and coat are distance 2 apart, but both connect
+        # through cot under the short-word threshold of 1.
+        words = ["cat", "cot", "coat"]
+
+        result = wordlist_cleaner.filter_memorable_words(
+            words, max_distance=2
+        )
+
+        self.assertEqual(result, ["cat"])
+
+    def test_distant_words_are_preserved(self):
+        words = ["alpha", "quartz", "window", "zebra"]
+
+        result = wordlist_cleaner.filter_memorable_words(
+            words, max_distance=2
+        )
+
+        self.assertEqual(result, sorted(words))
+
+    def test_duplicate_words_are_collapsed(self):
+        words = ["alpha", "alpha", "bravo", "bravo"]
+
+        result = wordlist_cleaner.filter_memorable_words(words)
+
+        self.assertEqual(result, ["alpha", "bravo"])
+
+    def test_empty_and_single_word_lists(self):
+        self.assertEqual(
+            wordlist_cleaner.filter_memorable_words([]),
+            [],
+        )
+
+        self.assertEqual(
+            wordlist_cleaner.filter_memorable_words(["alpha"]),
+            ["alpha"],
+        )
+
+    def test_short_word_threshold_is_one(self):
+        # Both words are short; distance 2 must not group them.
+        words = ["book", "back"]
+
+        result = wordlist_cleaner.filter_memorable_words(
+            words, max_distance=2
+        )
+
+        self.assertEqual(result, ["back", "book"])
+
+    def test_long_word_threshold_is_two(self):
+        # Two substitutions: accepted for words longer than five.
+        words = ["quartz", "quarxx"]
+
+        result = wordlist_cleaner.filter_memorable_words(
+            words, max_distance=2
+        )
+
+        self.assertEqual(result, ["quartz"])
+
+    def test_fast_filter_matches_exhaustive_reference(self):
+        # Broad alphabet and mixed lengths produce less artificial
+        # similarity than an alphabet containing only a and b.
+        alphabet = "abcdefghijkmnopqrstuvwxyz"
+        words = {
+            "cat", "cot", "coat", "quartz", "quarts",
+            "quarxx", "planet", "planets", "alpha",
+            "bravo", "charlie", "delta", "epsilon",
+        }
+
+        # Deterministic synthetic inputs; no external dependencies.
+        import random
+
+        rng = random.Random(20261017)
+
+        for _ in range(180):
+            length = rng.randint(3, 10)
+            words.add(
+                "".join(rng.choices(alphabet, k=length))
+            )
+
+        words = sorted(words)
+
+        actual = wordlist_cleaner.filter_memorable_words(
+            words, max_distance=2
+        )
+        expected = self.reference_filter(
+            words, max_distance=2
+        )
+
+        self.assertEqual(
+            actual,
+            expected,
+            msg=(
+                "Optimized filter differs from exhaustive reference.\n"
+                f"Actual: {actual}\n"
+                f"Expected: {expected}"
+            ),
+        )
+
+    def test_exhaustive_small_alphabet_matches_reference(self):
+        # Exhaustively compare every word over {a,b,c} up to length 4.
+        words = {
+            "".join(chars)
+            for length in range(1, 5)
+            for chars in itertools.product("abc", repeat=length)
+        }
+
+        actual = wordlist_cleaner.filter_memorable_words(
+            sorted(words), max_distance=2
+        )
+        expected = self.reference_filter(
+            sorted(words), max_distance=2
+        )
+
+        self.assertEqual(actual, expected)
+
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
