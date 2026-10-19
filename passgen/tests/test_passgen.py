@@ -782,6 +782,31 @@ class TestWordlistSimilarity(unittest.TestCase):
                     expected,
                 )
 
+    def test_bounded_levenshtein_matches_exact_distance(self):
+        words = [
+            "", "a", "b", "ab", "ba", "abc", "acb",
+            "abcd", "wxyz", "kitten", "sitting",
+        ]
+
+        for first in words:
+            for second in words:
+                exact = wordlist_cleaner.levenshtein_distance(
+                    first, second
+                )
+
+                for limit in range(4):
+                    with self.subTest(
+                        first=first, second=second, limit=limit
+                    ):
+                        actual = wordlist_cleaner.levenshtein_distance(
+                            first, second, max_distance=limit
+                        )
+                        expected = (
+                            exact if exact <= limit else limit + 1
+                        )
+                        self.assertEqual(actual, expected)
+
+
     def test_reference_distance_is_symmetric(self):
         words = [
             "", "a", "ab", "abc", "casa",

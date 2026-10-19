@@ -36,12 +36,59 @@ def positive_int(value):
 
     return number
 
-def levenshtein_distance(first, second):
-    """Return the Levenshtein edit distance between two words."""
+
+def levenshtein_distance(first, second, max_distance=None):
+    """Return Levenshtein distance, optionally bounded by max_distance."""
+    if first == second:
+        return 0
+
     if len(first) < len(second):
         first, second = second, first
 
-    previous = list(range(len(second) + 1))
+    len_first = len(first)
+    len_second = len(second)
+
+    if max_distance is not None:
+        if max_distance < 0:
+            raise ValueError("max_distance must be non-negative")
+
+        if len_first - len_second > max_distance:
+            return max_distance + 1
+
+        if not second:
+            return len_first if len_first <= max_distance else max_distance + 1
+
+        # Compute only the diagonal band that can stay within the limit.
+        previous = list(range(len_second + 1))
+        infinity = max_distance + 1
+
+        for i, char_first in enumerate(first, start=1):
+            start = max(1, i - max_distance)
+            end = min(len_second, i + max_distance)
+
+            current = [infinity] * (len_second + 1)
+            if start == 1:
+                current[0] = i
+
+            row_min = infinity
+
+            for j in range(start, end + 1):
+                current[j] = min(
+                    current[j - 1] + 1,
+                    previous[j] + 1,
+                    previous[j - 1] + (char_first != second[j - 1]),
+                )
+                row_min = min(row_min, current[j])
+
+            if row_min > max_distance:
+                return infinity
+
+            previous = current
+
+        distance = previous[len_second]
+        return distance if distance <= max_distance else infinity
+
+    previous = list(range(len_second + 1))
 
     for i, char_first in enumerate(first, start=1):
         current = [i]
@@ -51,9 +98,7 @@ def levenshtein_distance(first, second):
                 min(
                     current[j - 1] + 1,
                     previous[j] + 1,
-                    previous[j - 1] + (
-                        char_first != char_second
-                    ),
+                    previous[j - 1] + (char_first != char_second),
                 )
             )
 
@@ -113,7 +158,11 @@ def filter_memorable_words(words, max_distance=2):
             if abs(len(word) - len(other_word)) > threshold:
                 continue
 
-            if levenshtein_distance(word, other_word) <= threshold:
+            if levenshtein_distance(
+                word,
+                other_word,
+                max_distance=threshold,
+            ) <= threshold:
                 is_similar = True
                 break
 
@@ -185,8 +234,15 @@ def read_wordlist(source, encoding):
     content, detected_encoding = decode_content(data, encoding)
     lines = content.splitlines()
     entries, mode = extract_entries(lines)
+    blank_count = sum(not line.strip() for line in lines)
 
-    return entries, len(lines), detected_encoding, mode
+    return (
+        entries,
+        len(lines),
+        detected_encoding,
+        mode,
+        blank_count,
+    )
 
 
 def write_output(destination, words):
@@ -259,18 +315,15 @@ def clean_wordlists(
 
     # Process all inputs before writing the final output.
     for source in sources:
-        entries, line_count, detected_encoding, mode = read_wordlist(
-            source, encoding
+
+        entries, line_count, detected_encoding, mode, file_blank_count = (
+            read_wordlist(source, encoding)
         )
 
         total_lines += line_count
         formats[mode] += 1
-        blank_count += sum(
-            not line.strip()
-            for line in source.read_text(
-                encoding=ENCODINGS[detected_encoding]
-            ).splitlines()
-        )
+
+        blank_count += file_blank_count
 
         for entry in entries:
             word = normalize_word(entry)
