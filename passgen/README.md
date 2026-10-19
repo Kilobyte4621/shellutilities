@@ -464,4 +464,7 @@ Password mode requires exactly one of `-L` and `-E`. Passphrase mode requires ei
 
 ## License and wordlist provenance
 
-No license or wordlist provenance is specified in this release's documentation.
+No license is specified in this release's documentation.
+You can find some wordlists in the link below.
+
+<script src="https://gist.github.com/atoponce/95c4f36f2bc12ec13242a3ccc55023af.js"></script>
