@@ -207,7 +207,7 @@ When used with `-p N`, the output contains exactly `N` words. When used with `--
 
 ### Understanding passphrase entropy
 
-For a wordlist with \(W\) distinct entries and a passphrase containing \(P\) independently selected words, the base generation-choice entropy is:
+For a wordlist with $W$ distinct entries and a passphrase containing $P$ independently selected words, the base generation-choice entropy is:
 
 $$
 H = P\log_2(W)
@@ -221,11 +221,13 @@ $$
 
 where:
 
-- \(W\) is the number of distinct words in the loaded wordlist.
-- \(P\) is the number of words in the passphrase.
-- \(R\) is the number of modified word positions.
-- \(A\) is the size of the available insertion alphabet after separator characters are excluded.
-- \(L_i\) is the number of grapheme clusters in word \(i\).
+where:
+
+- $W$ is the number of distinct words in the loaded wordlist.
+- $P$ is the number of words in the passphrase.
+- $R$ is the number of modified word positions.
+- $A$ is the size of the available insertion alphabet after separator characters are excluded.
+- $L_i$ is the number of grapheme clusters in word $i$.
 
 **Generation-choice entropy is not necessarily the exact entropy of the final output string.** Different internal random choices can produce the same output string, including because of Unicode normalization. The displayed value describes the generator's modeled random choices and should not be interpreted as a proof of the final string's exact Shannon entropy.
 
