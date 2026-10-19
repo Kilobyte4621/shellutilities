@@ -3,6 +3,7 @@
 *.unique.txt
 *.memo.txt
 wordlist.*
+/wordlists/
 
 # Python bytecode and cache
 __pycache__/

@@ -7,6 +7,7 @@ import re
 import sys
 import unicodedata
 from pathlib import Path
+from datetime import datetime
 
 
 DICEWARE_RECORD = re.compile(
@@ -210,6 +211,25 @@ def write_output(destination, words):
     ):
         raise ValueError("Output verification failed")
 
+def get_available_output(destination):
+    """Return a non-existing output path without overwriting files."""
+    if not destination.exists():
+        return destination
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    candidate = destination.with_name(
+        f"{destination.stem}.{timestamp}{destination.suffix}"
+    )
+
+    counter = 1
+
+    while candidate.exists():
+        candidate = destination.with_name(
+            f"{destination.stem}.{timestamp}.{counter}{destination.suffix}"
+        )
+        counter += 1
+
+    return candidate
 
 def clean_wordlists(
     sources,
@@ -380,12 +400,12 @@ def main():
         )
         return 2
 
+    suffix = "memo" if args.memo else "unique"
+
     if source.is_file():
         sources = [source]
-        suffix = "memo" if args.memo else "unique"
-        default_output = source.with_name(
-            f"{source.stem}.{suffix}.txt"
-        )
+        output_name = f"{source.stem}.{suffix}.txt"
+
     elif source.is_dir():
         try:
             if args.recursive:
@@ -403,10 +423,10 @@ def main():
                 f"wordlist_cleaner: error: cannot list directory: {exc}",
                 file=sys.stderr,
             )
-            return 2        
+            return 2
 
-        suffix = "memo" if args.memo else "unique"
-        default_output = Path.cwd() / f"wordlist.{suffix}.txt"
+        output_name = f"{source.name}.{suffix}.txt"
+
     else:
         print(
             f"wordlist_cleaner: error: input is not a regular file "
@@ -415,11 +435,16 @@ def main():
         )
         return 2
 
+    default_output = Path.cwd() / "wordlists" / output_name
+
     destination = (
         args.output.expanduser()
         if args.output
         else default_output
     )
+
+    if not args.output:
+        destination = get_available_output(destination)
 
     try:
          clean_wordlists(
