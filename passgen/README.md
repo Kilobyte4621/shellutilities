@@ -464,7 +464,14 @@ Password mode requires exactly one of `-L` and `-E`. Passphrase mode requires ei
 
 ## License and wordlist provenance
 
-No license is specified in this release's documentation.
-You can find some wordlists in the link below.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-<script src="https://gist.github.com/atoponce/95c4f36f2bc12ec13242a3ccc55023af.js"></script>
+No wordlist is bundled with this project. Users are responsible for obtaining their own wordlists and ensuring that their use complies with the applicable licenses and terms.
+
+The following resources provide wordlists that may be suitable for passphrase generation:
+
+- [EFF Large Wordlist](https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt)
+- [Diceware Wordlists](https://diceware.readthedocs.io/en/stable/wordlists.html)
+- [Aaron Toponce's Word Lists](https://gist.github.com/atoponce/95c4f36f2bc12ec13242a3ccc55023af)
+
+The included `wordlist_cleaner.py` utility can be used to filter and normalize compatible wordlist files. Check the provenance and licensing terms of each source before using or redistributing its wordlists.
