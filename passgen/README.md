@@ -471,6 +471,11 @@ No wordlist is bundled with this project. Users are responsible for obtaining th
 The following resources provide wordlists that may be suitable for passphrase generation:
 
 - [EFF Large Wordlist](https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt)
+- EFF Themed Wordlists:
+  - [Game of Thrones](https://www.eff.org/files/2018/08/29/gameofthrones_8k-2018.txt)
+  - [Star Trek](https://www.eff.org/files/2018/08/29/memory-alpha_8k_2018.txt)
+  - [Star Wars](https://www.eff.org/files/2018/08/29/starwars_8k_2018.txt)
+  - [Harry Potter](https://www.eff.org/files/2018/08/29/harrypotter_8k_3column-txt.txt)
 - [Diceware Wordlists](https://diceware.readthedocs.io/en/stable/wordlists.html)
 - [Aaron Toponce's Word Lists](https://gist.github.com/atoponce/95c4f36f2bc12ec13242a3ccc55023af)
 
