@@ -209,18 +209,15 @@ When used with `-p N`, the output contains exactly `N` words. When used with `--
 
 For a wordlist with \(W\) distinct entries and a passphrase containing \(P\) independently selected words, the base generation-choice entropy is:
 
-\[
+$$
 H = P\log_2(W)
-\]
+$$
 
 With random-character insertion, the reported generation-choice entropy also accounts for the choice of distinct positions, inserted characters, and insertion positions. In the implementation, the estimate for `R > 0` is:
 
-\[
-H = P\log_2(W)
-+\log_2\binom{P}{R}
-+R\left(\log_2(A)+
-\frac{1}{W}\sum_{i=1}^{W}\log_2(L_i+1)\right)
-\]
+$$
+H = P\log_2(W) + \log_2\binom{P}{R} + R\left(\log_2(A) + \frac{1}{W}\sum_{i=1}^{W}\log_2(L_i+1)\right)
+$$
 
 where:
 
