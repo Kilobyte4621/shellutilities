@@ -1,149 +1,267 @@
-# Shell Utilities 🛠️
+# Shell Utilities
 
-A robust collection of advanced, modular shell functions engineered to optimize environment synchronization, automate recursive script bootstrapping, and handle batch file interoperability smoothly across Linux environments.
+A collection of modular shell utilities for Bash configuration management, recursive script loading, and batch file conversion, alongside standalone command-line tools.
 
----
+## General Philosophy
 
-## 📌 General Philosophy
+This repository focuses on practical, maintainable shell utilities with minimal dependencies and predictable behavior.
 
-In DevOps and local terminal environments, engineers face two recurring friction points:
+The tools address common workflow problems:
 
-1. **The `.bashrc` Clutter Problem:** Manually adding shortcuts, scripts, or multiple `source` lines creates maintenance nightmares and performance degradation over time.
-2. **Platform Constraints & Code Portability:** Security configurations on modern platforms (like cloud environments or enterprise firewalls) frequently block the raw transfer or upload of executable `.sh` files, requiring rapid text extraction for Large Language Models (LLMs) or visual review.
+- **Shell configuration management:** Reduce manual `.bashrc` maintenance through centralized script loading and configurable exclusions.
+- **Script interoperability:** Create text copies of shell scripts for documentation, code review, and sharing.
+- **Password generation:** Generate passwords and memorable passphrases using configurable wordlists and character transformations.
+- **Modularity:** Keep utilities independent so they can be used individually or integrated into existing workflows.
 
-This repository resolves these problems with zero external dependencies, emphasizing **idempotency** (running a tool multiple times without changing the result beyond the first application), **fail-safe defenses**, and strict cross-platform compatibility.
+## Utilities
 
----
+### 1. `add2bash` — v0.5.1
 
-## 🚀 Deep-Dive Tool Documentation
+A Bash function for appending custom text to `~/.bashrc` or configuring a recursive shell script loader.
 
-### 1. `add2bash` (v0.5)
+#### Features
 
-`add2bash` acts as a smart configuration injector and local environment manager for your main shell settings file (`~/.bashrc`). It features a dual-execution architectural path determined dynamically by user input.
+- Append custom text to `~/.bashrc` with interactive confirmation.
+- Generate `load_all.sh` to discover and source `.sh` files recursively.
+- Exclude scripts using `.scriptignore` patterns.
+- Optionally synchronize the auto-generated section of `.scriptignore` through `shellutilities/scriptignore-sync.sh`.
+- Avoid duplicate custom text and loader configuration markers.
+- Continue without automatic `.scriptignore` synchronization when the synchronization script is unavailable.
 
-```
-                [Executed add2bash]
-                        |
-            /-----------------------\
-     (Has Arguments)         (No Arguments)
-           |                       |
-   Inject Raw Custom       Generate Recursive
-   Text to ~/.bashrc       Central 'load_all.sh'
-                                   |
-                           Verify .scriptignore
-                                   |
-                           Inject Entrypoint 
-                             into ~/.bashrc
+#### Usage
 
-```
-
-#### 🔹 Operational Frameworks
-
-* **Mode A: Raw Text/Alias Appendment (Arguments Passed):** When executed with strings (e.g., `add2bash "alias k='kubectl'"`), the utility acts as a verified appender. It abstracts raw echo injections, showing a clean text preview and preventing malformed strings from ruining your environmental profile.
-* **Mode B: Recursive Central Loader Bootstrapping (No Arguments):** When run standalone inside a directory containing shell scripts, it automatically compiles an isolated, executable script called `load_all.sh`. It then updates your system's `~/.bashrc` to source only this specific loader file exactly once.
-
-#### 🔹 Technical Implementation Details
-
-* **Deterministic Tracking & Idempotency:** The utility computes a dynamic target header tag signature: `# [add2bash] Central Loader for <Target_Path>`. Before running any write process, it runs a quiet structural lookup utilizing `grep -Fq`. If the sequence is found, it terminates early to avoid duplicate initialization paths.
-* **Dynamic Sourcing Tree (`load_all.sh`):** The output module is pre-coded to query real-time execution locations dynamically via `readlink -f` combined with `$BASH_SOURCE` context mapping. It discovers all `.sh` extensions downward through a memory-safe `find` execution using null-byte line terminations (`-print0`) to avoid token-splitting issues on spaced filenames.
-* **Advanced Cross-Platform `.scriptignore` Parser:** The generated loader reads matching ignore files line-by-line (`IFS= read -r line`). It strips raw Windows carriage returns (`\r`) automatically using `tr -d` and eliminates trailing shell whitespaces via `xargs`. This ensures your rules work flawlessly even if patterns are composed or edited on Windows platforms (CRLF line-ending format).
-* **Infinite Execution-Loop Hardening:** Inside its runtime compilation shell loop, `add2bash` maps the filename variable against its own system runtime identity array (`$BASH_SOURCE`). If a match occurs, or if files lack explicit readable permissions (`! -r`), it triggers a shortcut `continue` instruction, ensuring the loader never tries to context-source itself recursively.
-* **Interactive Approvals:** Destructive actions or files containing changes intended for target setup arrays are strictly halted beforehand by an internal validation function (`confirm_action`), waiting for a positive `[y/Y]` manual user interaction.
-
----
-
-### 2. `sh2txt` (v0.1)
-
-`sh2txt` is a quick batch utility designed to locate executable `.sh` files in a workspace and safely copy them into `.txt` extension replicas. This simplifies sharing script content with LLMs, pasting script blocks inside documentation repositories, or moving code through firewalls that flag `.sh` binaries.
-
-#### 🔹 Operational Frameworks
-
-* Automatically evaluates input directives. If a targeted path parameter is missing (`$1`), it targets the current working directory (`.`).
-* Iterates sequentially through match targets without triggering breaking execution syntax errors.
-
-#### 🔹 Technical Implementation Details
-
-* **Zero Match Error Safeguard:** Standard directory loops fail or display system warnings if shell wildcards come up empty. `sh2txt` uses structural evaluation bounds (`[ -f "$f" ] || continue`) to safely bypass processing if no `.sh` files exist in the folder.
-* **Native String Parameter Expansion:** Instead of spawning system overhead processes like `sed` or `awk` to change the filename extension, the code handles renames using native shell parameter expansion: `${f%.sh}.txt`. This isolates the trailing suffix, cleanly transforming `script.sh` into `script.txt`.
-* **Built-in Scalability (Recursive Blueprint):** The tool includes a pre-built, alternative architecture commented out in the code. By toggling the comments, users can replace the single-tier directory loop with an advanced, multi-tier recursive engine powered by `find -exec sh -c 'for f; do cp -- "$f" "${f%.sh}.txt"; done' sh {} +`. This processes deeply nested scripts within an optimized subshell execution pattern.
-
----
-
-## 🛠️ Quick Start & Integration Operations
-
-### Step 1: Clone and Stage the Utilities
-
-Download the script files into your chosen automation or local development path:
+Source the function:
 
 ```bash
-mkdir -p ~/scripts && cd ~/scripts 
+source ./add2bash/add2bash.sh
+```
+
+**Append custom text:**
+
+```bash
+add2bash 'alias ll="ls -lah"'
+```
+
+**Configure the recursive loader:**
+
+Run the function from the directory containing the scripts you want to load:
+
+```bash
+cd ~/scripts/
+add2bash
+```
+
+The function generates or overwrites `load_all.sh` in the current directory, then asks for confirmation before modifying `~/.bashrc`.
+
+After accepting the configuration, reload the shell configuration:
+
+```bash
+source ~/.bashrc
+```
+
+#### `.scriptignore`
+
+The generated loader reads exclusion patterns from `.scriptignore` in its root directory.
+
+Examples:
+
+```text
+experimental.sh
+/private/
+/legacy/
+```
+
+Patterns without a leading `/` match substrings anywhere in a relative path. Patterns beginning with `/` match prefixes relative to the loader root.
+
+Blank lines and lines beginning with `#` are ignored. These patterns are not full glob expressions or Git-style ignore rules.
+
+#### Automatic synchronization
+
+Version `v0.5.1` optionally invokes:
+
+```bash
+shellutilities/scriptignore-sync.sh --write
+```
+
+The synchronization script must exist and be executable at the expected path relative to the current working directory. If it is unavailable, synchronization is skipped.
+
+**Security consideration:** The loader sources every discovered, readable `.sh` file that is not excluded. Only use it in directories containing scripts you trust.
+
+See [`add2bash/`](add2bash/) for the utility's source code and documentation.
+
+---
+
+### 2. `sh2txt` — v0.1
+
+A lightweight Bash function that copies `.sh` files to `.txt` files, preserving the original scripts.
+
+#### Features
+
+- Accepts a target directory as its first argument.
+- Defaults to the current directory when no argument is supplied.
+- Preserves filenames while replacing the `.sh` extension with `.txt`.
+- Handles filenames containing spaces.
+- Skips unmatched shell globs when no `.sh` files are present.
+- Does not modify the original scripts.
+
+#### Usage
+
+Source the function:
+
+```bash
+source ./sh2txt/sh2txt.sh
+```
+
+**Convert files in the current directory:**
+
+```bash
+sh2txt
+```
+
+**Convert files in a specific directory:**
+
+```bash
+sh2txt ~/projects/my-scripts/
+```
+
+For example, `backup.sh` becomes `backup.txt` in the same directory.
+
+The function is non-recursive by default. Only `.sh` files directly inside the specified directory are processed. A recursive alternative is included in the source code as a commented-out implementation.
+
+Existing `.txt` files with matching names are overwritten, subject to filesystem permissions.
+
+See [`sh2txt/`](sh2txt/) for the utility's source code and documentation.
+
+---
+
+### 3. `passgen`
+
+A password and passphrase generator supporting configurable generation modes and wordlists.
+
+The project includes functionality for generating passwords and memorable passphrases, with options for character transformations and entropy-oriented generation parameters.
+
+See [`passgen/`](passgen/) for the implementation, wordlist resources, usage instructions, and documentation.
+
+---
+
+### 4. `disktest`
+
+A Bash utility for testing USB flash drives and other removable storage media on Linux using [F3 (Fight Flash Fraud)](https://github.com/AltraMayor/f3).
+
+#### Features
+
+- Identify storage devices, partitions, filesystems, sizes, and mount points.
+- Perform non-destructive filesystem testing using `f3write` and `f3read`.
+- Detect data loss, corruption, unexpected changes, and overwritten test data.
+- Perform destructive capacity verification using `f3probe`.
+- Require explicit confirmation before testing.
+- Report test results and propagate failures through the function's exit status.
+
+#### Usage
+
+**Non-destructive filesystem test:**
+
+```bash
+disktest /dev/sdX
+```
+
+Tests detected mounted filesystems by writing and verifying test data. Existing files are not intentionally overwritten, but the test can consume nearly all available free space. Generated `.h2w` files remain on the device until removed.
+
+**Destructive capacity test:**
+
+```bash
+disktest --destructive /dev/sdX
+```
+
+Uses `f3probe` to compare advertised and usable device capacity. The target must be unmounted, and all data on the selected device must be considered at risk.
+
+#### Requirements
+
+- Linux and Bash
+- `util-linux`
+- F3 (`f3write`, `f3read`, and `f3probe`)
+
+On Debian, Ubuntu, and derivatives:
+
+```bash
+sudo apt install f3 util-linux
+```
+
+**Limitations:** A successful test does not guarantee long-term reliability, endurance, or data retention. The non-destructive mode tests mounted filesystems rather than every physical sector; the destructive mode can destroy existing data.
+
+See [`disktest/`](disktest/) for complete documentation and usage instructions.
+
+---
+
+## Installation
+
+Clone the repository:
+
+```bash
 git clone https://github.com/Kilobyte4621/shellutilities.git
 cd shellutilities
-
 ```
 
-### Step 2: Immediate Interventions (On-The-Fly Sourcing)
-
-Because these utilities are written as lightweight shell functions rather than standalone binaries, they must be sourced directly into your active session environment to be registered:
+Source individual Bash utilities as needed, using their respective paths:
 
 ```bash
-source add2bash.sh
-source sh2txt.sh
-
+source ./add2bash/add2bash.sh
+source ./sh2txt/sh2txt.sh
 ```
 
----
+Adjust the filenames if they differ from those shown above. Source only the functions you intend to use.
 
-## 💡 Real-World Use Case Scenarios
+Other utilities may have their own installation and execution requirements; consult their respective directories.
 
-### Scenario A: Bootstrapping a Recursive Config Toolkit
+## Practical Examples
 
-Imagine you have a custom toolkit folder located at `~/scripts/` containing multiple separate shell files (`aliases.sh`, `docker-helpers.sh`, `git-hacks.sh`). These scripts can be organized into subfolders, mixed structures, or completely different cloned git repositories. Because `load_all.sh` runs recursively down your directory tree, everything gets gathered dynamically.
+### Centralize shell configuration
 
-Instead of manual indexing inside your main profile, execute `add2bash` directly:
+Organize your shell scripts in a dedicated directory:
+
+```text
+~/scripts/
+├── aliases.sh
+├── functions.sh
+├── git/
+│   └── helpers.sh
+└── development/
+    └── tools.sh
+```
+
+Configure the loader from that directory:
 
 ```bash
-# 1. Navigate to your custom automation directory
 cd ~/scripts/
-
-# 2. Fire up the automatic generator
+source ~/scripts/shellutilities/add2bash/add2bash.sh
 add2bash
-
 ```
 
-If you skipped **Step 2** of the Quick Start and want to trigger the utility without executing it across your global profile yet, simply source the function container on the fly before running the generator:
+After accepting the `.bashrc` modification, the generated loader discovers scripts recursively, subject to the `.scriptignore` rules.
 
-```bash
-# Alternate 2: Source the container directly to call the function instantly
-source ~/scripts/shellutilities/add2bash.sh && add2bash
+To exclude a script, add a matching pattern to `~/scripts/.scriptignore`:
 
+```text
+development/tools.sh
 ```
 
-**What Happens Behind the Scenes:**
+### Create text copies of shell scripts
 
-1. `add2bash` recognizes that no extra text arguments were passed.
-2. It compiles a highly stable `load_all.sh` utility within that directory.
-3. It prints a clear preview of the changes it wants to make to your `~/.bashrc`.
-4. Once you approve the prompt (`y`), it adds a safe, single-line configuration hook.
-
-If you want to temporarily disable a script (like `experimental.sh`), simply add it to a local exclusion list:
+To prepare scripts for code review, documentation, or sharing:
 
 ```bash
-echo "experimental.sh" >> .scriptignore
-
-```
-
-The next time you open a terminal window, `load_all.sh` will skip that script entirely.
-
-### Scenario B: Batch Preparing Scripts for LLM Prompt Analysis
-
-When you need an AI tool to audit or refactor a group of scripts inside a project directory, use `sh2txt` to quickly generate text-friendly copies:
-
-```bash
-# Convert all .sh files inside a specific project folder
+source ./sh2txt/sh2txt.sh
 sh2txt ~/projects/legacy-automation/
-
 ```
 
-This leaves your primary executable scripts untouched while creating matching `.txt` files right next to them, ready to be grouped or attached to your prompt window.
+The function creates `.txt` copies beside the corresponding `.sh` files without modifying the originals.
 
+## Dependencies
+
+The Bash utilities rely on Bash and standard command-line utilities available on typical Linux systems. Optional `.scriptignore` synchronization requires the separate synchronization script.
+
+Individual tools may have additional dependencies. Refer to their own documentation for details.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
