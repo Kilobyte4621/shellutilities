@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# KeePassXC databases and backups
+*.kdbx
+*.kdb
+*.kdbx.lock
+*.kdbx.bak
+*.key
+
+# Extraction output directories
+passkeys-export-*/
+multi-passkey-test-*/
+integration-test-*/
+stage2-test*/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Debugging and logs
+*.log
+*.debug
+
+# IDE and editor settings
+.idea/
+.vscode/
+*.code-workspace
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+.directory
