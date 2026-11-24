@@ -1,5 +1,7 @@
-
 #!/usr/bin/env python3
+
+# Version Details: v0.0.1
+# - Extracts passkeys of a .kdbx database into separate daabases, preserving original cryptographic settings.
 
 import getpass
 import os

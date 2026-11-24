@@ -1,4 +1,4 @@
-# KDBX Passkey Xtractor
+# KDBX Passkey Xtractor (v0.0.1)
 
 Extracts WebAuthn passkey entries from a KeePassXC database into independent KDBX databases, generating a separate random master password for each one.
 
