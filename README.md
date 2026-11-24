@@ -18,8 +18,8 @@ The tools address common workflow problems:
 1. `add2bash`
 2. `sh2txt`
 3. `passgen`
-4. `kdbx-passkey-xtractor`
-5. `disktest`
+4. `disktest`
+5. `kdbx-passkey-xtractor`
 
 ## Installation
 
